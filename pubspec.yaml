@@ -70,7 +70,8 @@ dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/condo_logo.png"
+  # image_path: "assets/rwapros/3d-app-logo.jpg"
+  image_path: "assets/rwapros/app-image-360-white-withbg1.png"
 
 dev_dependencies:
   flutter_test:
@@ -138,14 +139,13 @@ flutter_native_splash:
   ios: true
   web: false
   fullscreen: true
-  color: "#62BCF8"
-  image: assets/splash-img.png
-  # branding: assets/condo-text.png
+  color: "#000000"               # Background color
+  image: assets/rwapros/splash-screen-image-white.png   # Centered splash logo
+
+  # Optional: Text or branding below logo
+  # branding: assets/rwapros-text.png
 
   android_12:
-    # Android 12 does NOT support full background image.
-    # It only allows a centered logo and solid color.
-    # So just show the logo or leave blank to make background image dominate.
-    image: assets/splash-img.png
-    color: "#62BCF8"
-    # branding: assets/condo-text.png
+    image: assets/rwapros/splash-screen-image-white.png
+    color: "#000000"
+    # branding: assets/rwapros-text.png
