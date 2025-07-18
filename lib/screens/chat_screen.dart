@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../constant/secert.dart'; // at the top
+// import '../constant/secert.dart'; // at the top
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -100,7 +100,7 @@ You are Naffan — a god-level RWA expert with razor-sharp wit. You explain Real
         url,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $openAiApiKey',
+          // 'Authorization': 'Bearer $openAiApiKey',
         },
         body: body,
       );

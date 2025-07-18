@@ -115,6 +115,24 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
 
+  // ✅ 1. Request permission
+  await FirebaseMessaging.instance.requestPermission();
+
+  // ✅ 2. iOS: Wait for APNs token to be ready
+  if (Platform.isIOS) {
+    String? apnsToken;
+    int retries = 0;
+
+    // Retry up to 5 times if APNs token isn't set immediately
+    while ((apnsToken == null || apnsToken.isEmpty) && retries < 5) {
+      await Future.delayed(const Duration(seconds: 1));
+      apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+      retries++;
+    }
+
+    print('APNs Token: $apnsToken');
+  }
+
   final fcmToken = await FirebaseMessaging.instance.getToken();
   print(fcmToken);
   if (fcmToken != null && prefs.getString('fcm_token') != fcmToken) {
@@ -131,7 +149,16 @@ void main() async {
   }
 
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  final initSettings = InitializationSettings(android: androidSettings);
+  final iosSettings = DarwinInitializationSettings(
+    requestAlertPermission: true,
+    requestBadgePermission: true,
+    requestSoundPermission: true,
+  );
+
+  final initSettings = InitializationSettings(
+    android: androidSettings,
+    iOS: iosSettings,
+  );
 
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
