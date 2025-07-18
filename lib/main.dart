@@ -250,7 +250,7 @@ class _MyAppState extends ConsumerState<MyApp> {
         // Add other supported locales here if needed
       ],
       navigatorKey: navigatorKey,
-      title: 'CONDO',
+      title: 'RWA PROS',
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: themeMode,
