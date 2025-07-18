@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "636683384935",
+    "project_id": "rwapros",
+    "storage_bucket": "rwapros.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:636683384935:android:64286a8db7157b8bf23cc2",
+        "android_client_info": {
+          "package_name": "com.example.rwapros"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0EFSK8ecZOx1816BSTrOFi7cRIT10VVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
