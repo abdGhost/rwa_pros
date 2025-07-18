@@ -115,6 +115,7 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
 
   final fcmToken = await FirebaseMessaging.instance.getToken();
+  print(fcmToken);
   if (fcmToken != null && prefs.getString('fcm_token') != fcmToken) {
     try {
       final response = await http.post(
