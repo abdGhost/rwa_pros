@@ -1,4 +1,4 @@
-package com.example.condo
+package com.example.rwapros
 
 import io.flutter.embedding.android.FlutterActivity
 

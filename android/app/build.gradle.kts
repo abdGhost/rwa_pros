@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.condo"
+    namespace = "com.example.rwapros"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.condo"
+        applicationId = "com.example.rwapros"
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

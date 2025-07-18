@@ -1,51 +1,26 @@
 {
   "project_info": {
-    "project_number": "262220607807",
-    "project_id": "condo-d3825",
-    "storage_bucket": "condo-d3825.firebasestorage.app"
+    "project_number": "636683384935",
+    "project_id": "rwapros",
+    "storage_bucket": "rwapros.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:262220607807:android:89c3c95649ae0c4970e38a",
+        "mobilesdk_app_id": "1:636683384935:android:64286a8db7157b8bf23cc2",
         "android_client_info": {
-          "package_name": "com.example.condo"
+          "package_name": "com.example.rwapros"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "262220607807-9cg15o4sktctsc0n71hcsh56hqkv5fir.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.condo",
-            "certificate_hash": "698d914e6a22fd14d4ac83070e7fab4374a8c243"
-          }
-        },
-        {
-          "client_id": "262220607807-5i9na1e4qr8u5u2dr5ep1cu2lc0hgpic.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB8481dXjKDU7IEgF11oTYUl7g4GDcljCI"
+          "current_key": "AIzaSyB0EFSK8ecZOx1816BSTrOFi7cRIT10VVc"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "262220607807-5i9na1e4qr8u5u2dr5ep1cu2lc0hgpic.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "262220607807-j9jn7g8odhtkfh161kfgd2qd3cf5jia0.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.condo"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
