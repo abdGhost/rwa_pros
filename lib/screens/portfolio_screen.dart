@@ -137,7 +137,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         titleSpacing: 16,
         title: Row(
           children: [
-            Image.asset('assets/condo_logo.png', width: 40, height: 40),
+            Image.asset('assets/rwapros/logo.png', width: 40, height: 40),
             const SizedBox(width: 8),
             Text(
               (_userName != null && _userName!.isNotEmpty)
@@ -145,7 +145,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   : "Portfolio",
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.w900,
-                fontSize: 22,
+                fontSize: 20,
                 color: theme.textTheme.titleMedium?.color,
               ),
             ),
@@ -205,7 +205,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/condo_splash.png', height: 200),
+              Image.asset('assets/rwapros/logo.png', height: 260),
               const SizedBox(height: 20),
               Text(
                 isLoggedIn

@@ -276,14 +276,14 @@ class _HomeScreenState extends State<HomeScreen>
           toolbarHeight: 60,
           title: Row(
             children: [
-              Image.asset('assets/condo_logo.png', width: 40, height: 40),
+              Image.asset('assets/rwapros/logo.png', width: 40, height: 40),
               const SizedBox(width: 8),
               Text(
-                'CONDO',
+                'RWA PROS',
                 style: GoogleFonts.inter(
                   textStyle: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w900,
-                    fontSize: 22,
+                    fontSize: 20,
                   ),
                 ),
               ),

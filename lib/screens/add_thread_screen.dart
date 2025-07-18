@@ -434,10 +434,16 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.lock_outline, size: 48, color: theme.primaryColor),
+            Image.asset(
+              'assets/rwapros/logo.png', // your image path
+              width: 300,
+              height: 300,
+              // color: theme.primaryColor,
+            ),
+            // Icon(Icons.lock_outline, size: 48, color: theme.primaryColor),
             const SizedBox(height: 12),
             Text(
-              'Please login to add a new thread.',
+              'Please login to use this feature.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 14,
@@ -445,7 +451,7 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                 color: theme.textTheme.bodyMedium?.color,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               height: 46,

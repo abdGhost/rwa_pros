@@ -134,13 +134,13 @@ class _NewsScreenState extends State<NewsScreen> {
         toolbarHeight: 60,
         title: Row(
           children: [
-            Image.asset('assets/condo_logo.png', width: 40, height: 40),
+            Image.asset('assets/rwapros/logo.png', width: 40, height: 40),
             const SizedBox(width: 8),
             if (!_isSearching)
               Text(
                 'Updates',
                 style: GoogleFonts.inter(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.w900,
                 ),
               ),

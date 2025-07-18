@@ -150,13 +150,13 @@ class _ForumScreenState extends State<ForumScreen> {
         titleSpacing: 16,
         title: Row(
           children: [
-            Image.asset('assets/condo_logo.png', width: 40, height: 40),
+            Image.asset('assets/rwapros/logo.png', width: 40, height: 40),
             const SizedBox(width: 8),
             Text(
               "Category",
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.w900,
-                fontSize: 22,
+                fontSize: 20,
                 color: theme.textTheme.titleMedium?.color,
               ),
             ),
