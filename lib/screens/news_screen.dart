@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,11 +10,11 @@ import 'package:rwa_app/screens/chat_screen.dart';
 import 'package:rwa_app/screens/podcast_player_screen.dart';
 import 'package:rwa_app/screens/profile_screen.dart';
 import 'package:rwa_app/widgets/filter_tab_widget.dart';
-import 'package:rwa_app/widgets/news/news_card_main.dart';
 import 'package:rwa_app/widgets/news/news_card_side.dart';
 import 'package:rwa_app/widgets/news/news_detail_screen.dart';
 import 'package:rwa_app/widgets/search_appbar_field_widget.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:carousel_slider/carousel_slider.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -33,16 +35,62 @@ class _NewsScreenState extends State<NewsScreen> {
 
   bool _isLoading = true;
 
+  int _currentPage = 0;
+  late PageController _pageController;
+  Timer? _carouselTimer;
+  List<Map<String, dynamic>> featuredNews = [];
+
+  final CarouselSliderController _carouselController =
+      CarouselSliderController();
+
   @override
   void initState() {
     super.initState();
     fetchAllData();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _carouselTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> fetchAllData() async {
     setState(() => _isLoading = true);
-    await Future.wait([fetchNews(), fetchPodcasts()]);
+    await Future.wait([fetchNews(), fetchFeaturedNews(), fetchPodcasts()]);
     setState(() => _isLoading = false);
+  }
+
+  Future<void> fetchFeaturedNews() async {
+    const url =
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/currencies/rwa/news/featured';
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List newsList = data['newsFeatures'];
+        print(newsList);
+
+        featuredNews =
+            newsList.map<Map<String, dynamic>>((news) {
+              return {
+                'image': news['thumbnail'],
+                'title': news['title'],
+                'subtitle': news['subTitle'],
+                'source': news['author'],
+                'time': news['publishDate'],
+                'content': news['content'],
+                'quote': null,
+                'bulletPoints': [],
+                'updatedAt': news['updatedAt'],
+                'isFeatured': true, // force-marked
+              };
+            }).toList();
+      }
+    } catch (e) {
+      print('❌ Error fetching featured news: $e');
+    }
   }
 
   Future<void> fetchNews() async {
@@ -53,7 +101,6 @@ class _NewsScreenState extends State<NewsScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List newsList = data['news'];
-        print(newsList);
         newsItems =
             newsList.map<Map<String, dynamic>>((news) {
               return {
@@ -66,6 +113,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 'quote': null,
                 'bulletPoints': [],
                 'updatedAt': news['updatedAt'],
+                'isFeatured': news['isFeatured'] ?? false,
               };
             }).toList();
 
@@ -251,47 +299,143 @@ class _NewsScreenState extends State<NewsScreen> {
   }
 
   Widget _buildNewsList() {
+    if (filteredNews.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 100),
+          child: Text(
+            'No news found.',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    final limitedFeaturedNews = featuredNews.take(10).toList();
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      children:
-          filteredNews.isNotEmpty
-              ? [
-                GestureDetector(
-                  onTap:
-                      () => Navigator.push(
+      children: [
+        if (limitedFeaturedNews.isNotEmpty)
+          Column(
+            children: [
+              CarouselSlider.builder(
+                itemCount: limitedFeaturedNews.length,
+                carouselController: _carouselController,
+                options: CarouselOptions(
+                  height: 160,
+                  viewportFraction: 0.8,
+                  autoPlay: true,
+                  autoPlayInterval: const Duration(seconds: 5),
+                  enlargeCenterPage: true,
+                  onPageChanged: (index, reason) {
+                    setState(() => _currentPage = index);
+                  },
+                ),
+                itemBuilder: (context, index, _) {
+                  final news = limitedFeaturedNews[index];
+                  return InkWell(
+                    onTap: () {
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder:
-                              (_) => NewsDetailScreen(news: filteredNews.first),
+                          builder: (_) => NewsDetailScreen(news: news),
                         ),
-                      ),
-                  child: NewsCardMain(item: filteredNews.first),
-                ),
-                const SizedBox(height: 10),
-                ...filteredNews
-                    .skip(1)
-                    .map(
-                      (item) => NewsCardSide(
-                        item: item,
-                        onTap:
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => NewsDetailScreen(news: item),
+                      );
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Image.network(
+                              news['image'],
+                              fit: BoxFit.cover,
+                              errorBuilder:
+                                  (_, __, ___) => Container(
+                                    color: Colors.grey.shade300,
+                                    child: const Icon(
+                                      Icons.broken_image,
+                                      size: 40,
+                                    ),
+                                  ),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withOpacity(0.7),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
                               ),
                             ),
+                          ),
+                          Positioned(
+                            left: 12,
+                            right: 12,
+                            bottom: 12,
+                            child: Text(
+                              news['title'] ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                shadows: const [
+                                  Shadow(
+                                    color: Colors.black,
+                                    offset: Offset(0, 1),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-              ]
-              : [
-                const SizedBox(height: 100),
-                Center(
-                  child: Text(
-                    'No news found.',
-                    style: GoogleFonts.inter(fontSize: 16, color: Colors.grey),
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(limitedFeaturedNews.length, (index) {
+                  final isActive = _currentPage == index;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: isActive ? Colors.blue : Colors.grey,
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        if (limitedFeaturedNews.isNotEmpty) const SizedBox(height: 12),
+        ...filteredNews.map(
+          (item) => NewsCardSide(
+            item: item,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => NewsDetailScreen(news: item)),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
