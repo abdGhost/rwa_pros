@@ -60,6 +60,7 @@ class _AirdropScreenState extends State<AirdropScreen> {
                       : "Upcoming";
 
               return {
+                '_id': item['_id'],
                 'project': item['tokenName'].trim(),
                 'token': item['tokenTicker'],
                 'chain': item['chain'],
@@ -178,6 +179,7 @@ class _AirdropScreenState extends State<AirdropScreen> {
                                     return Padding(
                                       padding: const EdgeInsets.only(bottom: 8),
                                       child: AirdropCard(
+                                        id: airdrop['_id']!,
                                         project: airdrop['project']!,
                                         token: airdrop['token']!,
                                         chain: airdrop['chain']!,

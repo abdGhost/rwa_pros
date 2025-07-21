@@ -1,13 +1,43 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AirdropDetailScreen extends StatelessWidget {
+class AirdropDetailScreen extends StatefulWidget {
   final Map<String, dynamic> airdrop;
 
   const AirdropDetailScreen({super.key, required this.airdrop});
 
   @override
+  State<AirdropDetailScreen> createState() => _AirdropDetailScreenState();
+}
+
+class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
+  final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _logAirdropDetailScreenView();
+  }
+
+  void _logAirdropDetailScreenView() async {
+    final porojectName = widget.airdrop['project'] ?? '';
+    final id = widget.airdrop['_id'] ?? '';
+
+    await _analytics.logEvent(
+      name: 'view_airdrop_detail',
+      parameters: {'id': id, 'project': porojectName},
+    );
+
+    await _analytics.logScreenView(
+      screenName: '/airdrop/$id',
+      screenClass: '/airdrop/$id',
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    print('-----------------------------------${widget.airdrop['_id']}');
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final Color primary = const Color(0xFF0087E0);
@@ -16,7 +46,7 @@ class AirdropDetailScreen extends StatelessWidget {
       backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
         title: Text(
-          '${airdrop['project']}',
+          '${widget.airdrop['project']}',
           style: GoogleFonts.inter(
             color: isDark ? Colors.white : Colors.black,
             fontSize: 18,
@@ -33,7 +63,10 @@ class AirdropDetailScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               height: 200,
-              child: Image.network(airdrop['image'] ?? '', fit: BoxFit.cover),
+              child: Image.network(
+                widget.airdrop['image'] ?? '',
+                fit: BoxFit.cover,
+              ),
             ),
             const SizedBox(height: 24),
             Stack(
@@ -52,7 +85,7 @@ class AirdropDetailScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${airdrop['project']} Airdrop',
+                          '${widget.airdrop['project']} Airdrop',
                           style: GoogleFonts.inter(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -63,13 +96,13 @@ class AirdropDetailScreen extends StatelessWidget {
                         _buildRichText(
                           isDark,
                           label: 'Ticker: ',
-                          value: '${airdrop['token']}',
+                          value: '${widget.airdrop['token']}',
                         ),
                         const SizedBox(height: 2),
                         _buildRichText(
                           isDark,
                           label: 'Chain: ',
-                          value: '${airdrop['chain']}',
+                          value: '${widget.airdrop['chain']}',
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -83,7 +116,7 @@ class AirdropDetailScreen extends StatelessWidget {
                             _buildRichText(
                               isDark,
                               label: 'Reward Pool: ',
-                              value: '${airdrop['reward']}',
+                              value: '${widget.airdrop['reward']}',
                             ),
                           ],
                         ),
@@ -99,7 +132,7 @@ class AirdropDetailScreen extends StatelessWidget {
                             _buildRichText(
                               isDark,
                               label: 'Date: ',
-                              value: '${airdrop['date']}',
+                              value: '${widget.airdrop['date']}',
                             ),
                           ],
                         ),
@@ -129,7 +162,7 @@ class AirdropDetailScreen extends StatelessWidget {
                                       ),
                                     ),
                                     TextSpan(
-                                      text: '${airdrop['eligibility']}',
+                                      text: '${widget.airdrop['eligibility']}',
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.normal,
                                         fontSize: 14,
@@ -159,7 +192,7 @@ class AirdropDetailScreen extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color:
-                          airdrop['status'] == 'Live'
+                          widget.airdrop['status'] == 'Live'
                               ? Colors.green
                               : Colors.red,
                       borderRadius: BorderRadius.circular(20),
@@ -174,7 +207,7 @@ class AirdropDetailScreen extends StatelessWidget {
                     child: Row(
                       children: [
                         Icon(
-                          airdrop['status'] == 'Live'
+                          widget.airdrop['status'] == 'Live'
                               ? Icons.check_circle
                               : Icons.cancel,
                           size: 14,
@@ -182,7 +215,7 @@ class AirdropDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          airdrop['status'],
+                          widget.airdrop['status'],
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 12,
@@ -199,7 +232,7 @@ class AirdropDetailScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                airdrop['description'] ?? 'No description available.',
+                widget.airdrop['description'] ?? 'No description available.',
                 style: GoogleFonts.inter(fontSize: 14),
               ),
             ),

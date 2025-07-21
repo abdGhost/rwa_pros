@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AirdropCard extends StatelessWidget {
+  final String id;
   final String project;
   final String token;
   final String chain;
@@ -15,6 +16,7 @@ class AirdropCard extends StatelessWidget {
 
   const AirdropCard({
     super.key,
+    required this.id,
     required this.project,
     required this.token,
     required this.chain,

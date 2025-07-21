@@ -29,18 +29,12 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   ];
 
   final List<String> _screenNames = [
-    'HomeScreen',
+    '/',
     '/news',
-    'AirdropScreen',
-    'PortfolioScreen',
-    'ForumScreen',
+    '/airdrop',
+    '/portfolio',
+    '/forum',
   ];
-
-  //  '/',
-  // '/news',
-  // '/airdrop',
-  // '/dashboard',
-  // '/forum',
 
   @override
   Widget build(BuildContext context) {
