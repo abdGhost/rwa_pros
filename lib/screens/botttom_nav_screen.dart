@@ -7,6 +7,7 @@ import 'package:rwa_app/screens/home_screen.dart';
 import 'package:rwa_app/screens/news_screen.dart';
 import 'package:rwa_app/screens/portfolio_screen.dart';
 // import 'package:rwa_app/screens/treasury_screen.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 class BottomNavScreen extends StatefulWidget {
   const BottomNavScreen({super.key});
@@ -26,6 +27,20 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     // TreasuryScreen(),
     ForumScreen(),
   ];
+
+  final List<String> _screenNames = [
+    'HomeScreen',
+    'NewsScreen',
+    'AirdropScreen',
+    'PortfolioScreen',
+    'ForumScreen',
+  ];
+
+  //  '/',
+  // '/news',
+  // '/airdrop',
+  // '/dashboard',
+  // '/forum',
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +66,20 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
           fontSize: 12,
           fontWeight: FontWeight.w400,
         ),
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+
+          // Delay the screen logging until after frame is rendered
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            FirebaseAnalytics.instance.logScreenView(
+              screenName: _screenNames[index],
+              screenClass: _screenNames[index],
+            );
+          });
+        },
+
         items: [
           BottomNavigationBarItem(
             icon: _buildIcon('market', 0, theme, isDark),

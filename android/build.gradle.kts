@@ -9,7 +9,8 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.3.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
-        classpath("com.google.gms:google-services:4.3.15") // Firebase plugin
+        classpath("com.google.gms:google-services:4.4.3")
+        classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.1") 
     }
 }
 
