@@ -30,7 +30,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   final List<String> _screenNames = [
     'HomeScreen',
-    'NewsScreen',
+    '/news',
     'AirdropScreen',
     'PortfolioScreen',
     'ForumScreen',

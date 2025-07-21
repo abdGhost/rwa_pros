@@ -85,6 +85,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 'bulletPoints': [],
                 'updatedAt': news['updatedAt'],
                 'isFeatured': true, // force-marked
+                'slug': news['slug'],
               };
             }).toList();
       }
@@ -114,6 +115,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 'bulletPoints': [],
                 'updatedAt': news['updatedAt'],
                 'isFeatured': news['isFeatured'] ?? false,
+                'slug': news['slug'],
               };
             }).toList();
 

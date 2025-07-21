@@ -2,11 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
-class NewsDetailScreen extends StatelessWidget {
+class NewsDetailScreen extends StatefulWidget {
   final Map<String, dynamic> news;
 
   const NewsDetailScreen({super.key, required this.news});
+
+  @override
+  State<NewsDetailScreen> createState() => _NewsDetailScreenState();
+}
+
+class _NewsDetailScreenState extends State<NewsDetailScreen> {
+  final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _logNewsDetailScreenView();
+  }
+
+  void _logNewsDetailScreenView() async {
+    final title = widget.news['title'] ?? 'News';
+    final slug = widget.news['slug'] ?? '';
+    print('-------------------------------------------------$slug');
+    final id = widget.news['id']?.toString() ?? '';
+
+    await _analytics.logEvent(
+      name: 'view_news_detail',
+      parameters: {'id': id, 'title': title, 'slug': slug},
+    );
+
+    await _analytics.logScreenView(
+      screenName: '/newsdetails/$slug',
+      screenClass: '/newsdetails/$slug',
+    );
+  }
 
   String getRelativeTime(DateTime dateTime) {
     final now = DateTime.now();
@@ -17,10 +48,12 @@ class NewsDetailScreen extends StatelessWidget {
     if (difference.inHours < 24) return '${difference.inHours} hours ago';
     if (difference.inDays == 1) return '1 day ago';
     if (difference.inDays < 7) return '${difference.inDays} days ago';
-    if (difference.inDays < 30)
+    if (difference.inDays < 30) {
       return '${(difference.inDays / 7).floor()} weeks ago';
-    if (difference.inDays < 365)
+    }
+    if (difference.inDays < 365) {
       return '${(difference.inDays / 30).floor()} months ago';
+    }
     return '${(difference.inDays / 365).floor()} years ago';
   }
 
@@ -36,23 +69,23 @@ class NewsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('📰 News Data: $news');
+    debugPrint('📰 News Data: ${widget.news}');
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textColor = theme.colorScheme.onBackground.withOpacity(0.85);
 
-    final String? image = news['thumbnail'] ?? news['image'];
-    final String? title = news['title'];
-    final String? source = news['author'] ?? news['source'];
-    final String? updatedAt = news['updatedAt'];
-    final String? authorImage = news['authorImage'];
-    final String? slug = news['slug'];
-    final String? content = news['content'];
-    final String? quote = news['quote'];
-    final List<dynamic> tags = news['tags'] ?? [];
+    final String? image = widget.news['thumbnail'] ?? widget.news['image'];
+    final String? title = widget.news['title'];
+    final String? source = widget.news['author'] ?? widget.news['source'];
+    final String? updatedAt = widget.news['updatedAt'];
+    final String? authorImage = widget.news['authorImage'];
+    final String? slug = widget.news['slug'];
+    final String? content = widget.news['content'];
+    final String? quote = widget.news['quote'];
+    final List<dynamic> tags = widget.news['tags'] ?? [];
     final List<String> bulletPoints = List<String>.from(
-      news['bulletPoints'] ?? [],
+      widget.news['bulletPoints'] ?? [],
     );
     final String formattedUpdatedAt = formatIsoDate(updatedAt) ?? '';
 
