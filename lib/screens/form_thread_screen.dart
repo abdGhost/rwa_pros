@@ -641,29 +641,49 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                thread['title'].toString().isNotEmpty
-                                    ? '${thread['title'][0].toUpperCase()}${thread['title'].substring(1)}'
-                                    : '',
+                              Row(
+                                children: [
+                                  // Profile image or initial
+                                  if (thread['profileImage'] != null &&
+                                      thread['profileImage']
+                                          .toString()
+                                          .isNotEmpty)
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundImage: NetworkImage(
+                                        thread['profileImage'],
+                                      ),
+                                    )
+                                  else
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: Colors.yellow,
+                                      child: Text(
+                                        thread['author'].toString().isNotEmpty
+                                            ? thread['author'][0].toUpperCase()
+                                            : '?',
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(width: 10),
 
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                  color: theme.textTheme.titleMedium?.color,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-
-                              HtmlPreviewWithToggle(
-                                html: removeEmptyBrParagraphAfterLists(
-                                  thread['description'] ?? '',
-                                ),
-                                isExpanded: expandedList[index],
-                                onToggle: () {
-                                  setState(() {
-                                    expandedList[index] = !expandedList[index];
-                                  });
-                                },
+                                  Expanded(
+                                    child: Text(
+                                      thread['title'].toString().isNotEmpty
+                                          ? '${thread['title'][0].toUpperCase()}${thread['title'].substring(1)}'
+                                          : '',
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                        color:
+                                            theme.textTheme.titleMedium?.color,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
 
                               const SizedBox(height: 4),
@@ -762,6 +782,30 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                       Text(
                                         // '${thread['replies']} discussions',
                                         '${thread['replies']}',
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w400,
+                                          fontSize: 12,
+                                          color: theme
+                                              .textTheme
+                                              .bodySmall
+                                              ?.color
+                                              ?.withOpacity(0.85),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  SizedBox(width: 20),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.remove_red_eye_outlined,
+                                        size: 18,
+                                        color: Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '20',
                                         style: GoogleFonts.inter(
                                           fontWeight: FontWeight.w400,
                                           fontSize: 12,

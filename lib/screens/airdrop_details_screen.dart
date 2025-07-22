@@ -37,7 +37,6 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print('-----------------------------------${widget.airdrop['_id']}');
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final Color primary = const Color(0xFF0087E0);
