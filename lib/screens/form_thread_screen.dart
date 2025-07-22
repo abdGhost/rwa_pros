@@ -34,6 +34,8 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   bool isExpanded = false;
   List<bool> expandedList = [];
 
+  Set<int> lockedIndexes = {};
+
   @override
   void initState() {
     super.initState();
@@ -297,12 +299,11 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   }
 
   Future<void> reactToThread(String forumId, int index) async {
-    if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please log in to use this feature.")),
-      );
+    if (token.isEmpty || lockedIndexes.contains(index)) {
       return;
     }
+
+    lockedIndexes.add(index); // 🔒 Lock
 
     final isLiked = likedList[index];
 
@@ -318,7 +319,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
     });
 
     final url = 'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react';
-    print(!isLiked);
+
     try {
       final response = await http.post(
         Uri.parse(url),
@@ -326,7 +327,6 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-
         body: jsonEncode({
           "forumId": forumId,
           "categoryId": widget.forumData['id'],
@@ -337,62 +337,40 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         socket.emit('reactThread', {"forumId": forumId});
       } else {
-        // ❌ Revert optimistic update on failure
         setState(() {
           likedList[index] = isLiked;
           threads[index]['likes'] =
               (threads[index]['likes'] ?? 0) + (isLiked ? 1 : -1);
+
+          if (!isLiked && dislikedList[index]) {
+            dislikedList[index] = true;
+            threads[index]['dislikes'] = (threads[index]['dislikes'] ?? 0) + 1;
+          }
         });
-        print('Failed to react: ${response.body}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to like. Please try again.',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            backgroundColor: Colors.redAccent,
-            duration: const Duration(seconds: 2),
-          ),
-        );
       }
     } catch (e) {
       print('Error reacting: $e');
-      // ❌ Revert optimistic update on exception
       setState(() {
         likedList[index] = isLiked;
         threads[index]['likes'] =
             (threads[index]['likes'] ?? 0) + (isLiked ? 1 : -1);
 
-        // If dislike was removed on optimistic like, re-add it on revert
         if (!isLiked && dislikedList[index]) {
           dislikedList[index] = true;
           threads[index]['dislikes'] = (threads[index]['dislikes'] ?? 0) + 1;
         }
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error. Please try again.',
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Colors.redAccent,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    } finally {
+      lockedIndexes.remove(index); // 🔓 Unlock
     }
   }
 
   Future<void> dislikeToThread(String forumId, int index) async {
-    if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please log in to use this feature.")),
-      );
+    if (token.isEmpty || lockedIndexes.contains(index)) {
       return;
     }
+
+    lockedIndexes.add(index); // 🔒 Lock
 
     final isDisliked = dislikedList[index];
 
@@ -424,26 +402,34 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
         }),
       );
 
-      print('Dislike API');
-      print(response.body);
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         socket.emit('reactThread', {"forumId": forumId});
       } else {
-        // revert on failure
         setState(() {
           dislikedList[index] = isDisliked;
           threads[index]['dislikes'] =
               (threads[index]['dislikes'] ?? 0) + (isDisliked ? 1 : -1);
-        });
 
-        print('Failed to dislike: ${response.body}');
+          if (!isDisliked && likedList[index]) {
+            likedList[index] = true;
+            threads[index]['likes'] = (threads[index]['likes'] ?? 0) + 1;
+          }
+        });
       }
     } catch (e) {
       print('Error disliking: $e');
       setState(() {
         dislikedList[index] = isDisliked;
+        threads[index]['dislikes'] =
+            (threads[index]['dislikes'] ?? 0) + (isDisliked ? 1 : -1);
+
+        if (!isDisliked && likedList[index]) {
+          likedList[index] = true;
+          threads[index]['likes'] = (threads[index]['likes'] ?? 0) + 1;
+        }
       });
+    } finally {
+      lockedIndexes.remove(index); // 🔓 Unlock
     }
   }
 
@@ -562,7 +548,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
               : threads.isEmpty
               ? Center(
                 child: Text(
-                  'No threads yet in ${widget.forumData['name']}.',
+                  'No threads yet',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
@@ -572,7 +558,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
               )
               : RefreshIndicator(
                 backgroundColor: Colors.white,
-                color: Color(0xFF0087E0),
+                color: Color(0xFFEBB411),
                 onRefresh: fetchThreads,
                 child: ListView.builder(
                   itemCount: threads.length,
@@ -657,7 +643,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                   else
                                     CircleAvatar(
                                       radius: 18,
-                                      backgroundColor: Colors.yellow,
+                                      backgroundColor: Color(0xFFEBB411),
                                       child: Text(
                                         thread['author'].toString().isNotEmpty
                                             ? thread['author'][0].toUpperCase()
@@ -708,12 +694,12 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                       children: [
                                         Icon(
                                           isLiked
-                                              ? Icons.thumb_up
+                                              ? Icons.thumb_up_outlined
                                               : Icons.thumb_up_alt_outlined,
                                           size: 18,
                                           color:
                                               isLiked
-                                                  ? Colors.blue
+                                                  ? Color(0xFFEBB411)
                                                   : Colors.grey[600],
                                         ),
                                         const SizedBox(width: 4),
@@ -725,7 +711,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                             fontSize: 12,
                                             color:
                                                 isLiked
-                                                    ? Colors.blue
+                                                    ? Color(0xFFEBB411)
                                                     : theme
                                                         .textTheme
                                                         .bodySmall
@@ -746,7 +732,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                       children: [
                                         Icon(
                                           isDisliked
-                                              ? Icons.thumb_down
+                                              ? Icons.thumb_down_outlined
                                               : Icons.thumb_down_alt_outlined,
                                           size: 18,
                                           color:
@@ -851,7 +837,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
             fetchThreads();
           }
         },
-        child: Icon(Icons.add, size: 32, color: theme.colorScheme.onPrimary),
+        child: Icon(Icons.add, size: 32, color: Colors.white),
       ),
     );
   }

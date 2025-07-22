@@ -174,34 +174,37 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                               const SizedBox(height: 16),
                               _label("Description", theme),
                               const SizedBox(height: 6),
+
                               Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: theme.cardColor,
                                   border: Border.all(
                                     color:
                                         _isFocused
-                                            ? Color(0xFF0087E0)
-                                            : Colors.grey.shade400,
+                                            ? theme.primaryColor
+                                            : theme.dividerColor,
                                     width: 1,
                                   ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Column(
                                   children: [
-                                    // ✅ Toolbar row 1
+                                    // ✅ Toolbar Row 1
                                     Container(
-                                      padding: EdgeInsets.all(4),
+                                      padding: const EdgeInsets.all(4),
                                       width: double.infinity,
                                       decoration: BoxDecoration(
+                                        color: theme.cardColor,
                                         border: Border(
                                           bottom: BorderSide(
-                                            color: Colors.grey.shade300,
+                                            color: theme.dividerColor,
                                           ),
                                         ),
                                       ),
                                       child: quill.QuillSimpleToolbar(
                                         controller: _descriptionController,
                                         config: quill.QuillSimpleToolbarConfig(
+                                          color: theme.cardColor,
                                           buttonOptions: quill.QuillSimpleToolbarButtonOptions(
                                             base: quill.QuillToolbarBaseButtonOptions(
                                               iconSize: 12,
@@ -217,13 +220,15 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                                                       style: ButtonStyle(
                                                         backgroundColor:
                                                             MaterialStateProperty.all(
-                                                              Color(0xFF0087E0),
+                                                              theme
+                                                                  .primaryColor,
                                                             ),
                                                       ),
                                                     ),
                                                 iconButtonUnselectedData:
                                                     quill.IconButtonData(
-                                                      color: Colors.black,
+                                                      color:
+                                                          theme.iconTheme.color,
                                                       padding:
                                                           const EdgeInsets.all(
                                                             8,
@@ -231,17 +236,19 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                                                       style: ButtonStyle(
                                                         backgroundColor:
                                                             MaterialStateProperty.all(
-                                                              Colors
-                                                                  .grey
-                                                                  .shade200,
+                                                              theme.brightness ==
+                                                                      Brightness
+                                                                          .dark
+                                                                  ? Colors
+                                                                      .grey[800]
+                                                                  : Colors
+                                                                      .grey[200],
                                                             ),
                                                       ),
                                                     ),
                                               ),
                                             ),
                                           ),
-
-                                          color: Colors.white,
                                           showColorButton: false,
                                           showFontFamily: false,
                                           multiRowsDisplay: false,
@@ -270,23 +277,23 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                                         ),
                                       ),
                                     ),
-                                    // ✅ Toolbar row 2
-                                    Container(
-                                      padding: EdgeInsets.all(4),
-                                      width: double.infinity,
 
+                                    // ✅ Toolbar Row 2
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      width: double.infinity,
                                       decoration: BoxDecoration(
+                                        color: theme.cardColor,
                                         border: Border(
                                           bottom: BorderSide(
-                                            color: Colors.grey.shade300,
+                                            color: theme.dividerColor,
                                           ),
                                         ),
                                       ),
                                       child: quill.QuillSimpleToolbar(
                                         controller: _descriptionController,
                                         config: quill.QuillSimpleToolbarConfig(
-                                          color: Colors.white,
-
+                                          color: theme.cardColor,
                                           buttonOptions: quill.QuillSimpleToolbarButtonOptions(
                                             base: quill.QuillToolbarBaseButtonOptions(
                                               iconSize: 12,
@@ -295,19 +302,6 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                                                 iconButtonSelectedData:
                                                     quill.IconButtonData(
                                                       color: Colors.white,
-                                                      padding: EdgeInsets.all(
-                                                        8,
-                                                      ),
-                                                      style: ButtonStyle(
-                                                        backgroundColor:
-                                                            MaterialStateProperty.all(
-                                                              Color(0xFF0087E0),
-                                                            ),
-                                                      ),
-                                                    ),
-                                                iconButtonUnselectedData:
-                                                    quill.IconButtonData(
-                                                      color: Colors.black,
                                                       padding:
                                                           const EdgeInsets.all(
                                                             8,
@@ -315,9 +309,29 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                                                       style: ButtonStyle(
                                                         backgroundColor:
                                                             MaterialStateProperty.all(
-                                                              Colors
-                                                                  .grey
-                                                                  .shade200,
+                                                              theme
+                                                                  .primaryColor,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                iconButtonUnselectedData:
+                                                    quill.IconButtonData(
+                                                      color:
+                                                          theme.iconTheme.color,
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            8,
+                                                          ),
+                                                      style: ButtonStyle(
+                                                        backgroundColor:
+                                                            MaterialStateProperty.all(
+                                                              theme.brightness ==
+                                                                      Brightness
+                                                                          .dark
+                                                                  ? Colors
+                                                                      .grey[800]
+                                                                  : Colors
+                                                                      .grey[200],
                                                             ),
                                                       ),
                                                     ),
@@ -353,28 +367,89 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                                         ),
                                       ),
                                     ),
-                                    // ✅ Editor area
+
+                                    // ✅ Editor Body
                                     Container(
                                       height: 300,
                                       margin: const EdgeInsets.all(8),
                                       padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: theme.cardColor,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
                                       child: Theme(
                                         data: Theme.of(context).copyWith(
                                           textSelectionTheme:
-                                              const TextSelectionThemeData(
-                                                cursorColor: Colors.blue,
-                                                selectionColor:
-                                                    Colors.blueAccent,
+                                              TextSelectionThemeData(
+                                                cursorColor: theme.primaryColor,
+                                                selectionColor: theme
+                                                    .primaryColor
+                                                    .withOpacity(0.4),
                                               ),
                                         ),
                                         child: quill.QuillEditor.basic(
                                           controller: _descriptionController,
                                           focusNode: _editorFocusNode,
                                           config: quill.QuillEditorConfig(
+                                            placeholder:
+                                                'Enter thread description...',
                                             textSelectionThemeData:
-                                                const TextSelectionThemeData(
-                                                  cursorColor: Colors.blue,
+                                                TextSelectionThemeData(
+                                                  cursorColor:
+                                                      theme.primaryColor,
                                                 ),
+                                            customStyles: quill.DefaultStyles(
+                                              placeHolder:
+                                                  quill.DefaultTextBlockStyle(
+                                                    GoogleFonts.inter(
+                                                      fontSize: 13,
+                                                      color: Theme.of(context)
+                                                          .hintColor
+                                                          .withOpacity(0.7),
+                                                      fontStyle:
+                                                          FontStyle.italic,
+                                                    ),
+                                                    const quill.HorizontalSpacing(
+                                                      0,
+                                                      0,
+                                                    ),
+                                                    const quill.VerticalSpacing(
+                                                      4,
+                                                      4,
+                                                    ),
+                                                    const quill.VerticalSpacing(
+                                                      0,
+                                                      0,
+                                                    ),
+                                                    null,
+                                                  ),
+
+                                              paragraph:
+                                                  quill.DefaultTextBlockStyle(
+                                                    TextStyle(
+                                                      fontSize: 13,
+                                                      color:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .bodyMedium
+                                                              ?.color,
+                                                      height: 1.5,
+                                                    ),
+                                                    const quill.HorizontalSpacing(
+                                                      0,
+                                                      0,
+                                                    ), // left & right
+                                                    const quill.VerticalSpacing(
+                                                      8,
+                                                      8,
+                                                    ), // top & bottom
+                                                    const quill.VerticalSpacing(
+                                                      0,
+                                                      0,
+                                                    ), // line spacing
+                                                    null, // no BoxDecoration
+                                                  ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -394,7 +469,7 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
                         height: 46,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0087E0),
+                            backgroundColor: const Color(0xFFEBB411),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6),
                             ),

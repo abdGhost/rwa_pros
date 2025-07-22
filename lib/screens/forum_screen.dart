@@ -6,6 +6,7 @@ import 'package:readmore/readmore.dart';
 import 'dart:convert';
 
 import 'package:rwa_app/screens/form_thread_screen.dart';
+import 'package:rwa_app/screens/forum_subcategory.dart';
 import 'package:rwa_app/screens/profile_screen.dart';
 
 class ForumScreen extends StatefulWidget {
@@ -191,7 +192,7 @@ class _ForumScreenState extends State<ForumScreen> {
               )
               : RefreshIndicator(
                 backgroundColor: Colors.white,
-                color: Color(0xFF0087E0),
+                color: Color(0xFFEBB411),
                 onRefresh: fetchForumData,
                 child: ListView.builder(
                   itemCount: forumData.length,
@@ -214,10 +215,20 @@ class _ForumScreenState extends State<ForumScreen> {
                             context,
                             MaterialPageRoute(
                               builder:
-                                  (_) => ForumThreadScreen(forumData: forum),
+                                  (_) => ForumSubcategory(categoryData: forum),
                             ),
                           );
                         },
+
+                        // onTap: () {
+                        //   Navigator.push(
+                        //     context,
+                        //     MaterialPageRoute(
+                        //       builder:
+                        //           (_) => ForumThreadScreen(forumData: forum),
+                        //     ),
+                        //   );
+                        // },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,

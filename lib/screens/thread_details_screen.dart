@@ -594,9 +594,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                                   decoration: BoxDecoration(
                                     color:
                                         selectedCommentId == reply['id']
-                                            ? theme.primaryColor.withOpacity(
-                                              0.2,
-                                            )
+                                            ? Color(0xFFEBB411)
                                             : Colors.transparent,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
@@ -609,7 +607,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     ),
                     if (selectedCommentUsername != null)
                       Container(
-                        color: Colors.grey[200],
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceVariant.withOpacity(0.8),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
@@ -621,11 +621,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 fontStyle: FontStyle.italic,
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const Spacer(),
                             IconButton(
                               icon: const Icon(Icons.close, size: 18),
+                              color: Theme.of(context).iconTheme.color,
                               onPressed: () {
                                 setState(() {
                                   selectedCommentId = null;
@@ -636,6 +641,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                           ],
                         ),
                       ),
+
                     _buildReplyInput(theme),
                   ],
                 ),
@@ -692,16 +698,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.thumb_up,
+                        Icons.thumb_up_outlined,
                         size: 18,
-                        color: isLiked ? Colors.blue : Colors.grey[700],
+                        color: isLiked ? Color(0xFFEBB411) : Colors.grey[700],
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '$likeCount',
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: isLiked ? Colors.blue : Colors.grey[700],
+                          color: isLiked ? Color(0xFFEBB411) : Colors.grey[700],
                         ),
                       ),
                     ],
@@ -717,7 +723,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.thumb_down,
+                        Icons.thumb_down_outlined,
                         size: 18,
                         color: isDisliked ? Colors.red : Colors.grey[700],
                       ),
@@ -879,12 +885,12 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                         children: [
                           Icon(
                             reply['isLiked']
-                                ? Icons.thumb_up
+                                ? Icons.thumb_up_outlined
                                 : Icons.thumb_up_alt_outlined,
                             size: 18,
                             color:
                                 reply['isLiked']
-                                    ? Colors.blue
+                                    ? Color(0xFFEBB411)
                                     : Colors.grey[700],
                           ),
                           const SizedBox(width: 4),
@@ -894,7 +900,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                               fontSize: 12,
                               color:
                                   reply['isLiked']
-                                      ? Colors.blue
+                                      ? Color(0xFFEBB411)
                                       : Colors.grey[700],
                             ),
                           ),
@@ -911,7 +917,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                         children: [
                           Icon(
                             reply['isDisliked'] == true
-                                ? Icons.thumb_down
+                                ? Icons.thumb_down_outlined
                                 : Icons.thumb_down_alt_outlined,
                             size: 18,
                             color:
@@ -998,11 +1004,11 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                          color: theme.colorScheme.onPrimary,
+                          color: Colors.white,
                           strokeWidth: 2,
                         ),
                       )
-                      : Icon(Icons.send, color: theme.colorScheme.onPrimary),
+                      : Icon(Icons.send, color: Colors.white),
               onPressed:
                   isSending
                       ? null
