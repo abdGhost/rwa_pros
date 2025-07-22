@@ -346,17 +346,24 @@ class _HomeScreenState extends State<HomeScreen>
                       title: 'Volume',
                       value: formatNumber(volume24h),
                       change: '24H',
-                      changeColor: Colors.white,
+                      changeColor:
+                          theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black,
                       width: cardWidth,
                     ),
                   ),
+
                   const SizedBox(width: 2),
                   Expanded(
                     child: StatCard(
                       title: 'Condo Treasury',
                       value: formatNumber(treasuryValue),
                       change: 'View More',
-                      changeColor: Colors.white,
+                      changeColor:
+                          theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black,
                       width: cardWidth,
                       isLast: true,
                     ),

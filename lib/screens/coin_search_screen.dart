@@ -151,9 +151,9 @@ class _CoinSearchScreenState extends State<CoinSearchScreen> {
                       (value) =>
                           setState(() => _isSearching = value.isNotEmpty),
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF0087E0),
+                    color: const Color(0xFFEBB411),
                   ),
-                  cursorColor: const Color(0xFF0087E0),
+                  cursorColor: const Color(0xFFEBB411),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search, color: Colors.grey),
                     suffixIcon:
