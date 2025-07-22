@@ -272,7 +272,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 _isLoading
                     ? const Center(
                       child: CircularProgressIndicator(
-                        color: Color(0xFF0087E0),
+                        color: Color(0xFFEBB411),
                       ),
                     )
                     : _selectedTab == 0
@@ -282,7 +282,7 @@ class _NewsScreenState extends State<NewsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF0087E0),
+        backgroundColor: Color(0xFFEBB411),
         shape: const CircleBorder(),
         onPressed: () {
           Navigator.push(
@@ -417,7 +417,7 @@ class _NewsScreenState extends State<NewsScreen> {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: isActive ? Colors.blue : Colors.grey,
+                      color: isActive ? Color(0xFFEBB411) : Colors.grey,
                       shape: BoxShape.circle,
                     ),
                   );

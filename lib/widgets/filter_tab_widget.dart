@@ -21,8 +21,8 @@ class FilterTab extends StatelessWidget {
     //  Color(0xFF0087E0) : Color.fromARGB(145, 8, 149, 243)
     final backgroundColor =
         isDarkMode
-            ? (isActive ? Color(0xFF0087E0) : const Color(0xFF2A2A2A))
-            : (isActive ? Color(0xFF0087E0) : const Color(0xFFF1F1F1));
+            ? (isActive ? Color(0xFFEBB411) : const Color(0xFF2A2A2A))
+            : (isActive ? Color(0xFFEBB411) : const Color(0xFFF1F1F1));
 
     final textColor =
         isDarkMode

@@ -103,7 +103,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                         fontSize: 14,
                         color:
                             isSelected
-                                ? const Color(0xFF0087E0)
+                                ? const Color(0xFFEBB411)
                                 : theme.textTheme.bodyMedium?.color
                                     ?.withOpacity(0.6),
                       ),
@@ -116,7 +116,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                       decoration: BoxDecoration(
                         color:
                             isSelected
-                                ? const Color(0xFF0087E0)
+                                ? const Color(0xFFEBB411)
                                 : Colors.transparent,
                         borderRadius: BorderRadius.circular(2),
                       ),
@@ -485,7 +485,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                       ),
                     ),
                     SizedBox(width: 2),
-                    const Icon(Icons.star, color: Color(0xFF0087E0), size: 18),
+                    const Icon(Icons.star, color: Color(0xFFEBB411), size: 18),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -965,7 +965,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
             child: Text(
               _isExpanded ? 'Show less' : 'Read more',
               style: TextStyle(
-                color: const Color(0xFF0087E0),
+                color: const Color(0xFFEBB411),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -1020,7 +1020,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                           children: List.generate(5, (i) {
                             return Icon(
                               i < rating ? Icons.star : Icons.star_border,
-                              color: const Color(0xFF0087E0),
+                              color: const Color(0xFFEBB411),
                               size: 18,
                             );
                           }),
@@ -1037,11 +1037,11 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                           children: [
                             CircleAvatar(
                               radius: 16,
-                              backgroundColor: Colors.blue[50],
+                              backgroundColor: Colors.grey[200],
                               child: Text(
                                 username.substring(0, 1).toUpperCase(),
                                 style: const TextStyle(
-                                  color: Color(0xFF0087E0),
+                                  color: Color(0xFFEBB411),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -1162,7 +1162,12 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Image.asset(link['icon']!, width: 18, height: 18),
+                            Image.asset(
+                              link['icon']!,
+                              width: 18,
+                              height: 18,
+                              color: const Color(0xFFEBB411),
+                            ),
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -1170,7 +1175,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF0087E0),
+                                  color: const Color(0xFFEBB411),
                                 ),
                               ),
                             ),

@@ -69,7 +69,7 @@ class SettingsScreen extends ConsumerWidget {
                           height: 20,
                           toggleSize: 16,
                           value: isDarkMode,
-                          activeColor: Color(0xFF0087E0),
+                          activeColor: Color(0xFFEBB411),
                           inactiveColor: const Color.fromRGBO(91, 91, 91, 1),
                           toggleColor: Colors.white,
                           onToggle: (val) {

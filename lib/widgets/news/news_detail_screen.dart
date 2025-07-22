@@ -149,7 +149,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                     children: [
                       CircleAvatar(
                         radius: 16,
-                        backgroundColor: Colors.grey.shade300,
+                        backgroundColor: Colors.grey[200],
                         backgroundImage:
                             authorImage != null && authorImage.isNotEmpty
                                 ? NetworkImage(authorImage)
@@ -161,7 +161,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF0087E0),
+                                    color: const Color(0xFFEBB411),
                                   ),
                                 )
                                 : null,
@@ -176,7 +176,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: const Color(0xFF0087E0),
+                              color: const Color(0xFFEBB411),
                             ),
                           ),
                           if (formattedUpdatedAt.isNotEmpty)

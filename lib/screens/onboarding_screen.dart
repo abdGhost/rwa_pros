@@ -183,7 +183,13 @@ class OnboardingScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset('assets/condo_splash.png', width: 200),
+                  Image.asset(
+                    Theme.of(context).brightness == Brightness.dark
+                        ? 'assets/rwapros/logo-white.png'
+                        : 'assets/rwapros/logo.png',
+                    width: 200,
+                  ),
+
                   const SizedBox(height: 8),
                   Text(
                     'The most Trusted app for\nReal World Assets',

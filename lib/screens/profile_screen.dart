@@ -105,7 +105,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ),
                             ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0087E0),
+                          backgroundColor: const Color(0xFFEBB411),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           minimumSize: const Size.fromHeight(44),
@@ -154,7 +154,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0087E0),
+                      backgroundColor: const Color(0xFFEBB411),
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(44),
                       shape: RoundedRectangleBorder(
@@ -236,7 +236,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   height: 20,
                   toggleSize: 16,
                   value: isDarkMode,
-                  activeColor: const Color(0xFF0087E0),
+                  activeColor: const Color(0xFFEBB411),
                   inactiveColor: const Color.fromRGBO(91, 91, 91, 1),
                   toggleColor: Colors.white,
                   onToggle: (val) {

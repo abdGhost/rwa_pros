@@ -74,12 +74,13 @@ class _HtmlContentModalState extends State<HtmlContentModal> {
                   isLoading
                       ? const Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFF0087E0),
+                          color: Color(0xFFEBB411),
                         ),
                       )
                       : SingleChildScrollView(
                         child: Html(
                           data: htmlData ?? "<p>No data available</p>",
+                          style: {"a": Style(color: const Color(0xFFEBB411))},
                         ),
                       ),
             ),

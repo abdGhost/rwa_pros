@@ -129,8 +129,8 @@ class NewsCardSide extends StatelessWidget {
                           item['source'] ?? '',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: const Color(0xFF0087E0),
-                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFEBB411),
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                         if (relativeTime.isNotEmpty) ...[
