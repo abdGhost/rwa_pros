@@ -382,14 +382,14 @@ class _HomeScreenState extends State<HomeScreen>
                   _isLoading
                       ? const Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFF0087E0),
+                          color: Color(0xFFEBB411),
                         ),
                       )
                       : _selectedTabIndex == 5
                       ? _isCategoryLoading
                           ? const Center(
                             child: CircularProgressIndicator(
-                              color: Color(0xFF0087E0),
+                              color: Color(0xFFEBB411),
                             ),
                           )
                           : selectedCategoryCoins.isNotEmpty
@@ -547,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen>
                 context,
                 MaterialPageRoute(builder: (_) => const ChatScreen()),
               ),
-          backgroundColor: const Color(0xFF0087E0),
+          backgroundColor: const Color(0xFFEBB411),
           shape: const CircleBorder(),
           child: SvgPicture.asset(
             'assets/bot_light.svg',

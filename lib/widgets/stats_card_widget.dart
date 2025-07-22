@@ -43,6 +43,7 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black;
     final bool isLoading = value == '...';
     final int indexValue =
         int.tryParse(value.replaceAll(RegExp(r'\D'), '')) ?? 0;
@@ -52,11 +53,12 @@ class StatCard extends StatelessWidget {
       height: 80,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFF0087E0),
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.horizontal(
           left: isFirst ? const Radius.circular(12) : Radius.zero,
           right: isLast ? const Radius.circular(12) : Radius.zero,
         ),
+        border: isDark ? null : Border.all(color: Colors.black12, width: 1),
       ),
       child:
           isFearGreed
@@ -68,7 +70,7 @@ class StatCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -78,7 +80,7 @@ class StatCard extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       )
                       : Stack(
@@ -95,7 +97,7 @@ class StatCard extends StatelessWidget {
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: textColor,
                             ),
                           ),
                         ],
@@ -111,7 +113,7 @@ class StatCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -121,7 +123,7 @@ class StatCard extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       )
                       : Text(
@@ -129,7 +131,7 @@ class StatCard extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -166,7 +168,7 @@ class StatCard extends StatelessWidget {
                             subtitle!,
                             style: GoogleFonts.inter(
                               fontSize: 14,
-                              color: Colors.white,
+                              color: textColor,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -187,7 +189,6 @@ class StatCard extends StatelessWidget {
                                 );
                               }
                               : null,
-
                       child: Row(
                         children: [
                           if (change!.contains('%'))

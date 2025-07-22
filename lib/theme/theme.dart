@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  static const primaryLight = Color(0xFF0087E0);
-  static const primaryDark = Color(0xFF0087E0);
+  // static const primaryLight = Color(0xFF0087E0);
+  // static const primaryDark = Color(0xFF0087E0);
+  static const primaryLight = Color(0xFFEBB411);
+  static const primaryDark = Color(0xFFEBB411);
   static const scaffoldLight = Color(0xFFF7F7F7);
   static const scaffoldDark = Color(0xFF0D0D0D);
   static const cardLight = Colors.white;

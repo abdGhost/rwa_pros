@@ -19,7 +19,7 @@ class TabBarSection extends StatelessWidget {
         tabAlignment: TabAlignment.center, // 🔄 CHANGE THIS LINE
         labelPadding: const EdgeInsets.only(right: 12),
         indicator: UnderlineTabIndicator(
-          borderSide: const BorderSide(color: Color(0xFF0087E0), width: 2),
+          borderSide: const BorderSide(color: Color(0xFFEBB411), width: 2),
           insets: const EdgeInsets.only(bottom: 10),
         ),
         indicatorSize: TabBarIndicatorSize.label,
