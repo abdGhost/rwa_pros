@@ -188,7 +188,7 @@ class _ForumScreenState extends State<ForumScreen> {
       body:
           isLoading
               ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF0087E0)),
+                child: CircularProgressIndicator(color: Color(0xFFEBB411)),
               )
               : RefreshIndicator(
                 backgroundColor: Colors.white,
