@@ -143,7 +143,7 @@ class _AirdropScreenState extends State<AirdropScreen> {
                   _isLoading
                       ? const Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFF0087E0),
+                          color: Color(0xFFEBB411),
                         ),
                       )
                       : Padding(
@@ -221,7 +221,7 @@ class _AirdropScreenState extends State<AirdropScreen> {
               MaterialPageRoute(builder: (context) => const ChatScreen()),
             );
           },
-          backgroundColor: const Color(0xFF0087E0),
+          backgroundColor: const Color(0xFFEBB411),
           shape: const CircleBorder(),
           child: SvgPicture.asset(
             'assets/bot_light.svg',

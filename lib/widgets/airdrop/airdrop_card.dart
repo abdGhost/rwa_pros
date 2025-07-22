@@ -145,10 +145,11 @@ class AirdropCard extends StatelessWidget {
                       "🔍 View Details",
                       style: TextStyle(
                         fontSize: 14,
+                        fontWeight: FontWeight.w500,
                         color:
                             isDarkMode
-                                ? Colors.blue[200]
-                                : const Color.fromRGBO(48, 96, 184, 1),
+                                ? const Color(0xFFEBB411)
+                                : const Color(0xFFEBB411),
                       ),
                     ),
                   ),
@@ -182,7 +183,7 @@ class AirdropCard extends StatelessWidget {
                           : const Color(0xFFDFFBEA))
                       : isEnded
                       ? (isDarkMode ? Colors.red[600] : const Color(0xFFFEE9E9))
-                      : const Color(0xFF0087E0), // App blue for Upcoming
+                      : const Color(0xFFEBB411), // App blue for Upcoming
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

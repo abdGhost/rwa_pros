@@ -39,7 +39,7 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final Color primary = const Color(0xFF0087E0);
+    final Color primary = const Color(0xFFEBB411);
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : Colors.white,
@@ -193,6 +193,8 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                       color:
                           widget.airdrop['status'] == 'Live'
                               ? Colors.green
+                              : widget.airdrop['status'] == 'Upcoming'
+                              ? const Color(0xFFEBB411) // yellow
                               : Colors.red,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
@@ -203,6 +205,7 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                         ),
                       ],
                     ),
+
                     child: Row(
                       children: [
                         Icon(

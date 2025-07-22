@@ -39,8 +39,10 @@ class FilterTab extends StatelessWidget {
           border: Border.all(
             color:
                 isActive
-                    ? const Color.fromRGBO(52, 143, 108, 0.3)
-                    : const Color.fromRGBO(0, 0, 0, 0.1),
+                    ? const Color(0xFFEBB411) // Yellow border when active
+                    : (isDarkMode
+                        ? const Color.fromRGBO(255, 255, 255, 0.1)
+                        : const Color.fromRGBO(0, 0, 0, 0.1)),
           ),
         ),
         alignment: Alignment.center,
