@@ -137,7 +137,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         titleSpacing: 16,
         title: Row(
           children: [
-            Image.asset('assets/rwapros/logo.png', width: 40, height: 40),
+            Image.asset(
+              Theme.of(context).brightness == Brightness.dark
+                  ? 'assets/rwapros/logo-white.png'
+                  : 'assets/rwapros/logo.png',
+              width: 40,
+              height: 40,
+            ),
             const SizedBox(width: 8),
             Text(
               (_userName != null && _userName!.isNotEmpty)

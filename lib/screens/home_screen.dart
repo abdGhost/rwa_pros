@@ -276,7 +276,14 @@ class _HomeScreenState extends State<HomeScreen>
           toolbarHeight: 60,
           title: Row(
             children: [
-              Image.asset('assets/rwapros/logo.png', width: 40, height: 40),
+              Image.asset(
+                Theme.of(context).brightness == Brightness.dark
+                    ? 'assets/rwapros/logo-white.png'
+                    : 'assets/rwapros/logo.png',
+                width: 40,
+                height: 40,
+              ),
+
               const SizedBox(width: 8),
               Text(
                 'RWA PROS',
