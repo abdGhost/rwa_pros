@@ -37,9 +37,12 @@ class _HomeScreenState extends State<HomeScreen>
   int _selectedTabIndex = 0;
   final int _itemsPerPage = 25;
 
-  List<Coin> allCoins = [];
-  List<Coin> displayedCoins = [];
-  List<Coin> favCoin = [];
+  List<Coin> allCoinsTab = [];
+  List<Coin> topCoinsTab = [];
+  List<Coin> watchlistTab = [];
+  List<Coin> trendingTab = [];
+  List<Coin> topGainersTab = [];
+
   List<Category> categories = [];
   List<Coin> selectedCategoryCoins = [];
   String? selectedCategoryName;
@@ -50,7 +53,6 @@ class _HomeScreenState extends State<HomeScreen>
   late TabController _tabController;
 
   bool _showLoginButton = false;
-  bool _isWatchlistLoading = false;
   double? treasuryValue;
 
   @override
@@ -74,8 +76,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _scrollListener() {
-    final isInfiniteTab = _selectedTabIndex == 0 || _selectedTabIndex == 1;
-
+    final isInfiniteTab = _selectedTabIndex == 0;
     final canLoadMore =
         isInfiniteTab &&
         _scrollController.position.pixels >=
@@ -99,34 +100,22 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {
           treasuryValue = (json['totalBalance'] as num?)?.toDouble() ?? 0.0;
         });
-      } else {
-        print("❌ Failed to fetch treasury data: ${response.statusCode}");
       }
-    } catch (e) {
-      // print("❌ fetchTreasuryData error: $e");
-    }
+    } catch (e) {}
   }
 
   Future<void> fetchInitialData(int index) async {
-    setState(() {
-      _isLoading = true;
-      _currentPage = 1;
-      _hasMoreData = true;
-      allCoins = [];
-      displayedCoins = [];
-    });
+    setState(() => _isLoading = true);
+    await fetchTreasuryData();
 
     try {
       final highlight = await _apiService.fetchHighlightData();
       final topTrend = await _apiService.fetchTopTrendingCoin();
 
-      await fetchTreasuryData();
-
       marketCap = (highlight['market_cap'] as num?)?.toDouble();
       volume24h = (highlight['volume_24h'] as num?)?.toDouble();
       marketCapChange =
           (highlight['market_cap_change_24h'] as num?)?.toDouble();
-
       trendingCoinSymbol = topTrend?['symbol']?.toUpperCase();
       trendingCoinDominance = ((topTrend?['market_cap_change_percentage_24h']
                       as num?)
@@ -135,34 +124,32 @@ class _HomeScreenState extends State<HomeScreen>
           .toStringAsFixed(2);
       trendingCoinImage = topTrend?['image'];
 
-      if (index == 2) {
-        final loggedIn = await isUserLoggedIn();
-        _showLoginButton = !loggedIn;
-
-        if (!loggedIn) {
-          favCoin = [];
-        } else {
-          _isWatchlistLoading = true;
-          setState(() {});
-          favCoin = await _apiService.fetchWatchlists();
-          _isWatchlistLoading = false;
-        }
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      if (index == 3) {
-        displayedCoins = await _apiService.fetchTrendingCoins();
-      } else if (index == 5) {
-        _isCategoryLoading = true;
-        categories = await _apiService.fetchCategories();
-        _isCategoryLoading = false;
-      } else {
-        allCoins = await _apiService.fetchCoinsPaginated(
-          page: _currentPage,
-          size: _itemsPerPage,
-        );
-        displayedCoins = List.from(allCoins);
+      switch (index) {
+        case 0:
+          allCoinsTab = await _apiService.fetchCoinsPaginated(
+            page: _currentPage,
+            size: _itemsPerPage,
+          );
+          break;
+        case 1:
+          topCoinsTab = await _apiService.fetchCoinsPaginated();
+          break;
+        case 2:
+          final loggedIn = await isUserLoggedIn();
+          _showLoginButton = !loggedIn;
+          watchlistTab = loggedIn ? await _apiService.fetchWatchlists() : [];
+          break;
+        case 3:
+          trendingTab = await _apiService.fetchTrendingCoins();
+          break;
+        case 4:
+          topGainersTab = await _apiService.fetchTopGainers();
+          break;
+        case 5:
+          _isCategoryLoading = true;
+          categories = await _apiService.fetchCategories();
+          _isCategoryLoading = false;
+          break;
       }
     } catch (e) {
       print("❌ fetchInitialData Error: $e");
@@ -170,6 +157,23 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (!mounted) return;
     setState(() => _isLoading = false);
+  }
+
+  List<Coin> get currentTabCoins {
+    switch (_selectedTabIndex) {
+      case 0:
+        return allCoinsTab;
+      case 1:
+        return topCoinsTab;
+      case 2:
+        return watchlistTab;
+      case 3:
+        return trendingTab;
+      case 4:
+        return topGainersTab;
+      default:
+        return [];
+    }
   }
 
   Future<void> _loadMoreCoins() async {
@@ -180,16 +184,13 @@ class _HomeScreenState extends State<HomeScreen>
         page: nextPage,
         size: _itemsPerPage,
       );
-      print(newCoins);
-
       if (newCoins.isEmpty) {
         _hasMoreData = false;
       } else {
-        final existingIds = allCoins.map((e) => e.id).toSet();
+        final existingIds = allCoinsTab.map((e) => e.id).toSet();
         final filtered =
             newCoins.where((coin) => !existingIds.contains(coin.id)).toList();
-        allCoins.addAll(filtered);
-        if (_selectedTabIndex != 2) displayedCoins = List.from(allCoins);
+        allCoinsTab.addAll(filtered);
         _currentPage = nextPage;
       }
     } catch (e) {
@@ -205,71 +206,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _onTabChanged(int index) async {
-    if (_selectedTabIndex == index) {
-      if (index == 2) {
-        setState(() => _isLoading = true);
-        final loggedIn = await isUserLoggedIn();
-        _showLoginButton = !loggedIn;
-        favCoin = loggedIn ? await _apiService.fetchWatchlists() : [];
-        displayedCoins =
-            loggedIn ? favCoin : []; // ✅ Clear data if not logged in
-        setState(() => _isLoading = false);
-      }
-      return;
-    }
-
-    setState(() {
-      _selectedTabIndex = index;
-      _isLoading = true;
-      _showLoginButton = false;
-      selectedCategoryCoins = [];
-      selectedCategoryName = null;
-    });
-
-    try {
-      switch (index) {
-        case 0:
-          _currentPage = 1;
-          _hasMoreData = true;
-          allCoins = await _apiService.fetchCoinsPaginated(
-            page: _currentPage,
-            size: _itemsPerPage,
-          );
-          displayedCoins = List.from(allCoins);
-          break;
-        case 1:
-          displayedCoins = await _apiService.fetchCoinsPaginated();
-          break;
-        case 2:
-          final loggedIn = await isUserLoggedIn();
-          _showLoginButton = !loggedIn;
-          try {
-            favCoin = loggedIn ? await _apiService.fetchWatchlists() : [];
-          } catch (e) {
-            print("❌ fetchWatchlists Error: $e");
-            favCoin = []; // clear old data if fetch fails
-          }
-          displayedCoins = loggedIn ? favCoin : [];
-          break;
-
-        case 3:
-          displayedCoins = await _apiService.fetchTrendingCoins();
-          break;
-        case 4:
-          displayedCoins = await _apiService.fetchTopGainers();
-          break;
-        case 5:
-          _isCategoryLoading = true;
-          setState(() {});
-          categories = await _apiService.fetchCategories();
-          _isCategoryLoading = false;
-          break;
-      }
-    } catch (e) {
-      print("❌ _onTabChanged Error: $e");
-    }
-
-    setState(() => _isLoading = false);
+    if (_selectedTabIndex == index) return;
+    setState(() => _selectedTabIndex = index);
+    await fetchInitialData(index);
   }
 
   String formatNumber(double? value) {
@@ -456,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               Expanded(
                                 child: CoinsTable(
-                                  coins: displayedCoins,
+                                  coins: currentTabCoins,
                                   scrollController: _scrollController,
                                   onCoinTap: (coin) {},
                                   startRank:
@@ -626,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                       )
-                      : displayedCoins.isEmpty && _selectedTabIndex == 2
+                      : currentTabCoins.isEmpty && _selectedTabIndex == 2
                       ? Center(
                         child: Text(
                           'No coin yet added',
@@ -645,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen>
                           await fetchInitialData(_selectedTabIndex);
                         },
                         child: CoinsTable(
-                          coins: displayedCoins,
+                          coins: currentTabCoins,
                           scrollController: _scrollController,
                           onCoinTap: (coin) {},
                           startRank: (_currentPage - 1) * _itemsPerPage + 1,

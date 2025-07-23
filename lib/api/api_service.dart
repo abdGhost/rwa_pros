@@ -172,6 +172,7 @@ class ApiService {
   Future<List<Coin>> fetchTrendingCoins() async {
     final url = Uri.parse("$_baseUrl/currencies/rwa/trend");
     final response = await http.get(url);
+    print(response.body);
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
