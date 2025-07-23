@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -33,6 +34,37 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+
+  Future<void> sendFcmTokenToBackend(String jwtToken) async {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken == null) {
+      debugPrint("❌ FCM token is null, cannot send to backend.");
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://rwa-f1623a22e3ed.herokuapp.com/api/users/fcmtoken'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({'token': fcmToken}),
+      );
+
+      print('FCM TOKEN SEND ____________________${response.body}');
+
+      if (response.statusCode == 201) {
+        debugPrint("✅ FCM token sent successfully with auth.");
+      } else {
+        debugPrint(
+          "⚠️ Failed to send FCM token: ${response.statusCode} ${response.body}",
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ Exception sending FCM token: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -287,6 +319,13 @@ class _SignupScreenState extends State<SignupScreen> {
       final json = jsonDecode(response.body);
       if (response.statusCode == 200 && json['status'] == true) {
         final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('loginMethod', 'google');
+
+        // Send FCM token ✅
+        await sendFcmTokenToBackend(json['token']);
+
+        _showSnackBar("Google sign-in successful!");
+
         await prefs.setString('token', json['token']);
         await prefs.setString('email', user.email ?? "");
         await prefs.setString('userId', json['userId'] ?? user.uid);
@@ -349,6 +388,13 @@ class _SignupScreenState extends State<SignupScreen> {
       final json = jsonDecode(response.body);
       if (response.statusCode == 200 && json['status'] == true) {
         final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('loginMethod', 'apple');
+
+        // Send FCM token ✅
+        await sendFcmTokenToBackend(json['token']);
+
+        _showSnackBar("Apple sign-in successful!");
+
         await prefs.setString('token', json['token']);
         await prefs.setString('email', payload['email'] ?? "");
         await prefs.setString('userId', json['userId'] ?? user.uid);

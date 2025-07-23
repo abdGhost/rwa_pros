@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -45,6 +46,34 @@ class OnboardingScreen extends StatelessWidget {
       final user = userCred.user;
 
       if (user == null) throw Exception("Firebase sign-in failed");
+
+      // 🔥 Get FCM token after Google login
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      print('✅ FCM Token after Google Sign-In: $fcmToken');
+
+      // ⏺ Save to backend if not already saved
+      final prefs = await SharedPreferences.getInstance();
+      if (fcmToken != null && prefs.getString('fcm_token') != fcmToken) {
+        try {
+          final res = await http.post(
+            Uri.parse(
+              'https://rwa-f1623a22e3ed.herokuapp.com/api/users/fcmtoken',
+            ),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': fcmToken}),
+          );
+          print('FCM TOKEN SEND ===============================${res.body}');
+
+          if (res.statusCode == 200) {
+            await prefs.setString('fcm_token', fcmToken);
+            print('📤 FCM token saved to backend');
+          } else {
+            print('❌ Failed to send FCM token: ${res.statusCode}');
+          }
+        } catch (e) {
+          print('❌ Error sending FCM token: $e');
+        }
+      }
 
       final payload = {
         "userName": user.displayName ?? "No Name",
@@ -116,6 +145,32 @@ class OnboardingScreen extends StatelessWidget {
       final user = userCred.user;
       if (user == null) throw Exception("Apple Sign-In failed");
 
+      // 🔥 Get FCM token after Apple login
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      print('✅ FCM Token after Apple Sign-In: $fcmToken');
+
+      // ⏺ Save to backend if not already saved
+      final prefs = await SharedPreferences.getInstance();
+      if (fcmToken != null && prefs.getString('fcm_token') != fcmToken) {
+        try {
+          final res = await http.post(
+            Uri.parse(
+              'https://rwa-f1623a22e3ed.herokuapp.com/api/users/fcmtoken',
+            ),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': fcmToken}),
+          );
+          if (res.statusCode == 200) {
+            await prefs.setString('fcm_token', fcmToken);
+            print('📤 FCM token saved to backend');
+          } else {
+            print('❌ Failed to send FCM token: ${res.statusCode}');
+          }
+        } catch (e) {
+          print('❌ Error sending FCM token: $e');
+        }
+      }
+
       final payload = {
         "userName": user.displayName ?? appleCred.givenName ?? "Apple User",
         "profileImg": "",
@@ -134,7 +189,6 @@ class OnboardingScreen extends StatelessWidget {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         if (json['status'] == true) {
-          final prefs = await SharedPreferences.getInstance();
           await prefs.setString('token', json['token']);
           await prefs.setString('email', payload['email'] ?? "");
           await prefs.setString('name', payload['userName'] ?? "");
@@ -159,6 +213,72 @@ class OnboardingScreen extends StatelessWidget {
       debugPrint("Apple Sign-In Error: $e");
     }
   }
+
+  // Future<void> _handleAppleSignIn(BuildContext context) async {
+  //   try {
+  //     _showSnackBar(context, "Signing in with Apple...");
+
+  //     final appleCred = await SignInWithApple.getAppleIDCredential(
+  //       scopes: [
+  //         AppleIDAuthorizationScopes.email,
+  //         AppleIDAuthorizationScopes.fullName,
+  //       ],
+  //     );
+
+  //     final oauthCred = OAuthProvider("apple.com").credential(
+  //       idToken: appleCred.identityToken,
+  //       accessToken: appleCred.authorizationCode,
+  //     );
+
+  //     final userCred = await FirebaseAuth.instance.signInWithCredential(
+  //       oauthCred,
+  //     );
+  //     final user = userCred.user;
+  //     if (user == null) throw Exception("Apple Sign-In failed");
+
+  //     final payload = {
+  //       "userName": user.displayName ?? appleCred.givenName ?? "Apple User",
+  //       "profileImg": "",
+  //       "email": user.email ?? "",
+  //       "appleId": user.uid,
+  //     };
+
+  //     final response = await http.post(
+  //       Uri.parse(
+  //         "https://rwa-f1623a22e3ed.herokuapp.com/api/users/auth/apple",
+  //       ),
+  //       headers: {"Content-Type": "application/json"},
+  //       body: jsonEncode(payload),
+  //     );
+
+  //     if (response.statusCode == 200) {
+  //       final json = jsonDecode(response.body);
+  //       if (json['status'] == true) {
+  //         final prefs = await SharedPreferences.getInstance();
+  //         await prefs.setString('token', json['token']);
+  //         await prefs.setString('email', payload['email'] ?? "");
+  //         await prefs.setString('name', payload['userName'] ?? "");
+  //         await prefs.setString('profileImg', "");
+  //         await prefs.setString('loginMethod', 'apple');
+  //         final userId = json['userId'] ?? user.uid;
+  //         await prefs.setString('userId', userId);
+
+  //         _showSnackBar(context, "Apple sign-in successful!");
+  //         Navigator.pushReplacement(
+  //           context,
+  //           MaterialPageRoute(builder: (_) => const BottomNavScreen()),
+  //         );
+  //       } else {
+  //         _showSnackBar(context, "Backend Auth Failed");
+  //       }
+  //     } else {
+  //       _showSnackBar(context, "Server error during Apple Sign-In");
+  //     }
+  //   } catch (e) {
+  //     _showSnackBar(context, "Apple Sign-In failed");
+  //     debugPrint("Apple Sign-In Error: $e");
+  //   }
+  // }
 
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
