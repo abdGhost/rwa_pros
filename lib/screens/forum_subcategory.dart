@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:characters/characters.dart'; // Safe string character access
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -28,30 +29,42 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
 
     try {
       final categoryId = widget.categoryData['id'];
+      final apiUrl =
+          'https://rwa-f1623a22e3ed.herokuapp.com/api/admin/forum-sub-category?category=$categoryId';
+      print('📡 Fetching Subcategories from: $apiUrl');
+
       final response = await http.get(
-        Uri.parse(
-          'https://rwa-f1623a22e3ed.herokuapp.com/api/admin/forum-sub-category?category=$categoryId',
-        ),
+        Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        print(jsonResponse);
+        print('✅ API Response: ${jsonEncode(jsonResponse)}');
 
-        if (jsonResponse['status'] == true &&
-            jsonResponse['subCategories'] != null) {
+        if (jsonResponse is List) {
           subcategories = List<Map<String, dynamic>>.from(
-            jsonResponse['subCategories'],
+            jsonResponse.map(
+              (item) => {
+                '_id': item['_id'],
+                'name': item['name'],
+                'description': item['description'],
+                'subCategoryImage': item['subCategoryImage'],
+                'createdAt': item['createdAt'],
+                'totalLikes': item['totalLikes'] ?? 0,
+                'totalComments': item['totalComments'] ?? 0,
+                'totalDislikes': item['totalDislikes'] ?? 0,
+              },
+            ),
           );
         } else {
-          throw Exception('No subcategories found');
+          print('⚠️ Unexpected response format. Expected a List.');
         }
       } else {
-        throw Exception('Failed to load subcategories');
+        print('❌ Failed to fetch. Status code: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error: $e');
+      print('❌ Error fetching subcategories: $e');
     } finally {
       setState(() => isLoading = false);
     }
@@ -67,8 +80,9 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
     if (difference.inSeconds < 60) return 'Just now';
     if (difference.inMinutes < 60) return '${difference.inMinutes} min ago';
     if (difference.inHours < 24) return '${difference.inHours} hr ago';
-    if (difference.inDays < 30)
+    if (difference.inDays < 30) {
       return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    }
     if (difference.inDays < 365) {
       final months = (difference.inDays / 30).floor();
       return '$months month${months > 1 ? 's' : ''} ago';
@@ -109,8 +123,9 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                 itemCount: subcategories.length,
                 itemBuilder: (context, index) {
                   final sub = subcategories[index];
-                  final likes = sub['likes'] ?? 0;
-                  final replies = sub['replies'] ?? 0;
+                  final likes = sub['totalLikes'] ?? 0;
+                  final dislikes = sub['totalDislikes'] ?? 0;
+                  final replies = sub['totalComments'] ?? 0;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -135,14 +150,25 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                                 : null,
                         child:
                             sub['subCategoryImage'] == null
-                                ? Text(
-                                  sub['name']?.isNotEmpty == true
-                                      ? sub['name'][0].toUpperCase()
-                                      : '?',
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                                ? Builder(
+                                  builder: (_) {
+                                    final name =
+                                        sub['name']?.toString().trim() ?? '';
+                                    if (name.isNotEmpty) {
+                                      return Text(
+                                        name.characters.first.toUpperCase(),
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      );
+                                    } else {
+                                      return const Text(
+                                        '?',
+                                        style: TextStyle(color: Colors.white),
+                                      );
+                                    }
+                                  },
                                 )
                                 : null,
                       ),
@@ -158,7 +184,7 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                         padding: const EdgeInsets.only(top: 6),
                         child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.thumb_up_outlined,
                               size: 14,
                               color: Colors.grey,
@@ -175,7 +201,24 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Icon(
+                            const Icon(
+                              Icons.thumb_down_outlined,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$dislikes',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color:
+                                    isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[800],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Icon(
                               Icons.chat_bubble_outline,
                               size: 14,
                               color: Colors.grey,
@@ -191,8 +234,8 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                                         : Colors.grey[800],
                               ),
                             ),
-                            Spacer(),
-                            Icon(
+                            const Spacer(),
+                            const Icon(
                               Icons.access_time,
                               size: 14,
                               color: Colors.grey,
@@ -211,7 +254,6 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                           ],
                         ),
                       ),
-
                       onTap: () {
                         Navigator.push(
                           context,
