@@ -83,7 +83,7 @@ class _TreasuryScreenState extends State<TreasuryScreen> {
             Image.asset('assets/condo_logo.png', width: 40, height: 40),
             const SizedBox(width: 8),
             Text(
-              "Treasury",
+              "Condo Treasury",
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.w900,
                 fontSize: 22,
