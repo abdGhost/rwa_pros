@@ -781,29 +781,29 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                     ],
                                   ),
 
-                                  SizedBox(width: 20),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.remove_red_eye_outlined,
-                                        size: 18,
-                                        color: Colors.grey[600],
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '20',
-                                        style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w400,
-                                          fontSize: 12,
-                                          color: theme
-                                              .textTheme
-                                              .bodySmall
-                                              ?.color
-                                              ?.withOpacity(0.85),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  // SizedBox(width: 20),
+                                  // Row(
+                                  //   children: [
+                                  //     Icon(
+                                  //       Icons.remove_red_eye_outlined,
+                                  //       size: 18,
+                                  //       color: Colors.grey[600],
+                                  //     ),
+                                  //     const SizedBox(width: 4),
+                                  //     Text(
+                                  //       '20',
+                                  //       style: GoogleFonts.inter(
+                                  //         fontWeight: FontWeight.w400,
+                                  //         fontSize: 12,
+                                  //         color: theme
+                                  //             .textTheme
+                                  //             .bodySmall
+                                  //             ?.color
+                                  //             ?.withOpacity(0.85),
+                                  //       ),
+                                  //     ),
+                                  //   ],
+                                  // ),
                                   const Spacer(),
                                   Text(
                                     timeAgo(thread['createdAt']),
