@@ -37,7 +37,7 @@ class _NewsScreenState extends State<NewsScreen> {
   bool _isLoading = true;
 
   int _currentPage = 0;
-  late PageController _pageController;
+  // late PageController _pageController;
   Timer? _carouselTimer;
   List<Map<String, dynamic>> featuredNews = [];
 
@@ -52,7 +52,7 @@ class _NewsScreenState extends State<NewsScreen> {
 
   @override
   void dispose() {
-    _pageController.dispose();
+    // _pageController.dispose();
     _carouselTimer?.cancel();
     super.dispose();
   }

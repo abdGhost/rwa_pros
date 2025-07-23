@@ -6,12 +6,16 @@ class CoinsTable extends StatefulWidget {
   final List<Coin> coins;
   final ScrollController? scrollController;
   final void Function(Coin)? onCoinTap;
+  final int startRank;
+  final bool isLoadingMore;
 
   const CoinsTable({
     super.key,
     required this.coins,
     this.scrollController,
     this.onCoinTap,
+    this.startRank = 1,
+    this.isLoadingMore = false,
   });
 
   @override
@@ -106,7 +110,7 @@ class _CoinsTableState extends State<CoinsTable> {
                 children: [
                   const SizedBox(width: 24, child: Center(child: Text('#'))),
                   const SizedBox(width: 8),
-                  const SizedBox(width: 20), // for icon
+                  const SizedBox(width: 20),
                   _headerCell('Coin', 'name', headerStyle, flex: 2),
                   _headerCell('Price', 'price', headerStyle, flex: 3),
                   const Expanded(flex: 2, child: Center(child: Text('24H'))),
@@ -122,8 +126,20 @@ class _CoinsTableState extends State<CoinsTable> {
             Expanded(
               child: ListView.builder(
                 controller: widget.scrollController,
-                itemCount: _sortedCoins.length,
+                itemCount: _sortedCoins.length + (widget.isLoadingMore ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index >= _sortedCoins.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFEBB411),
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  }
+
                   final coin = _sortedCoins[index];
                   final isNegative = coin.priceChange24h < 0;
                   final isPositive = coin.priceChange24h > 0;
@@ -156,7 +172,12 @@ class _CoinsTableState extends State<CoinsTable> {
                               SizedBox(
                                 width: 24,
                                 child: Center(
-                                  child: Text('${coin.rank}', style: rowStyle),
+                                  child: Text(
+                                    _sortBy == 'rank'
+                                        ? '${coin.rank ?? (widget.startRank + index)}'
+                                        : '${widget.startRank + index}',
+                                    style: rowStyle,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),

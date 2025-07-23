@@ -168,6 +168,7 @@ class _HomeScreenState extends State<HomeScreen>
       print("❌ fetchInitialData Error: $e");
     }
 
+    if (!mounted) return;
     setState(() => _isLoading = false);
   }
 
@@ -179,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen>
         page: nextPage,
         size: _itemsPerPage,
       );
+      print(newCoins);
 
       if (newCoins.isEmpty) {
         _hasMoreData = false;
@@ -436,10 +438,19 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               Expanded(
                                 child: CoinsTable(
-                                  coins: selectedCategoryCoins,
+                                  coins: displayedCoins,
                                   scrollController: _scrollController,
                                   onCoinTap: (coin) {},
+                                  startRank:
+                                      (_currentPage - 1) * _itemsPerPage + 1,
+                                  isLoadingMore: _isLoadingMore,
                                 ),
+
+                                // child: CoinsTable(
+                                //   coins: selectedCategoryCoins,
+                                //   scrollController: _scrollController,
+                                //   onCoinTap: (coin) {},
+                                // ),
                               ),
                             ],
                           )
@@ -548,10 +559,19 @@ class _HomeScreenState extends State<HomeScreen>
                               );
                             },
                           )
-                      : CoinsTable(
-                        coins: displayedCoins,
-                        scrollController: _scrollController,
-                        onCoinTap: (coin) {},
+                      : RefreshIndicator(
+                        color: const Color(0xFFEBB411),
+                        onRefresh: () async {
+                          _currentPage = 1;
+                          _hasMoreData = true;
+                          await fetchInitialData(_selectedTabIndex);
+                        },
+                        child: CoinsTable(
+                          coins: displayedCoins,
+                          scrollController: _scrollController,
+                          onCoinTap: (coin) {},
+                          startRank: (_currentPage - 1) * _itemsPerPage + 1,
+                        ),
                       ),
             ),
           ],
