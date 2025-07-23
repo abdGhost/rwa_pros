@@ -10,6 +10,7 @@ import 'package:rwa_app/models/coin_model.dart';
 import 'package:rwa_app/screens/chat_screen.dart';
 import 'package:rwa_app/screens/coin_search_screen.dart';
 import 'package:rwa_app/screens/coins_table_widget.dart';
+import 'package:rwa_app/screens/coming_soon.dart';
 import 'package:rwa_app/screens/onboarding_screen.dart';
 import 'package:rwa_app/screens/profile_screen.dart';
 import 'package:rwa_app/widgets/stats_card_widget.dart';
@@ -559,8 +560,13 @@ class _HomeScreenState extends State<HomeScreen>
           onPressed:
               () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ChatScreen()),
+                MaterialPageRoute(builder: (_) => const ComingSoonScreen()),
               ),
+          // onPressed:
+          //     () => Navigator.push(
+          //       context,
+          //       MaterialPageRoute(builder: (_) => const ChatScreen()),
+          //     ),
           backgroundColor: const Color(0xFFEBB411),
           shape: const CircleBorder(),
           child: SvgPicture.asset(

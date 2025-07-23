@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:rwa_app/screens/airdrop_details_screen.dart';
 import 'package:rwa_app/screens/chat_screen.dart';
+import 'package:rwa_app/screens/coming_soon.dart';
 import 'package:rwa_app/widgets/airdrop/airdrop_card.dart';
 import 'package:rwa_app/widgets/filter_tab_widget.dart';
 
@@ -218,9 +219,15 @@ class _AirdropScreenState extends State<AirdropScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ChatScreen()),
+              MaterialPageRoute(builder: (context) => const ComingSoonScreen()),
             );
           },
+          // onPressed: () {
+          //   Navigator.push(
+          //     context,
+          //     MaterialPageRoute(builder: (context) => const ChatScreen()),
+          //   );
+          // },
           backgroundColor: const Color(0xFFEBB411),
           shape: const CircleBorder(),
           child: SvgPicture.asset(

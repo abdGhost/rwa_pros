@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:rwa_app/models/podcast.dart';
 import 'package:rwa_app/screens/chat_screen.dart';
+import 'package:rwa_app/screens/coming_soon.dart';
 import 'package:rwa_app/screens/podcast_player_screen.dart';
 import 'package:rwa_app/screens/profile_screen.dart';
 import 'package:rwa_app/widgets/filter_tab_widget.dart';
@@ -292,10 +293,17 @@ class _NewsScreenState extends State<NewsScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: Color(0xFFEBB411),
         shape: const CircleBorder(),
+
+        // onPressed: () {
+        //   Navigator.push(
+        //     context,
+        //     MaterialPageRoute(builder: (_) => const ChatScreen()),
+        //   );
+        // },
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ChatScreen()),
+            MaterialPageRoute(builder: (_) => const ComingSoonScreen()),
           );
         },
         child: SvgPicture.asset(
