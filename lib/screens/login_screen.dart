@@ -302,16 +302,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    "Forget Password?",
-                    style: TextStyle(color: AppColors.primaryLight),
-                  ),
-                ),
-              ),
+              // Align(
+              //   alignment: Alignment.centerRight,
+              //   child: TextButton(
+              //     onPressed: () {},
+              //     child: const Text(
+              //       "Forget Password?",
+              //       style: TextStyle(color: AppColors.primaryLight),
+              //     ),
+              //   ),
+              // ),
               const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,

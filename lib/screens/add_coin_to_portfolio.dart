@@ -100,7 +100,7 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                       (value) =>
                           setState(() => _isSearching = value.isNotEmpty),
                   style: GoogleFonts.inter(color: const Color(0xFF16C784)),
-                  cursorColor: const Color(0xFF16C784),
+                  cursorColor: const Color(0xFFEBB411),
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -132,7 +132,7 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
       body:
           _isLoading
               ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF0087E0)),
+                child: CircularProgressIndicator(color: Color(0xFFEBB411)),
               )
               : SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -375,7 +375,7 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF0087E0),
+                    color: Color(0xFFEBB411),
                   ),
                 )
                 : Row(

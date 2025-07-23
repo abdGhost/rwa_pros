@@ -22,6 +22,38 @@ class _AddPortfolioTransactionScreenState
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _dateController = TextEditingController();
 
+  bool isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(_updatePricePerToken);
+    _quantityController.addListener(_updatePricePerToken);
+  }
+
+  void _updatePricePerToken() {
+    final amount = double.tryParse(_amountController.text);
+    final quantity = double.tryParse(_quantityController.text);
+
+    if (amount != null && quantity != null && quantity > 0) {
+      final price = amount / quantity;
+      _priceController.text = price.toStringAsFixed(4);
+    } else {
+      _priceController.text = '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _amountController.removeListener(_updatePricePerToken);
+    _quantityController.removeListener(_updatePricePerToken);
+    _amountController.dispose();
+    _quantityController.dispose();
+    _priceController.dispose();
+    _dateController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -33,7 +65,7 @@ class _AddPortfolioTransactionScreenState
             data: Theme.of(context).copyWith(
               colorScheme: Theme.of(
                 context,
-              ).colorScheme.copyWith(primary: const Color(0xFF0087E0)),
+              ).colorScheme.copyWith(primary: const Color(0xFFEBB411)),
             ),
             child: child!,
           ),
@@ -47,9 +79,10 @@ class _AddPortfolioTransactionScreenState
   }
 
   Future<void> _submitTransaction() async {
+    setState(() => isSubmitting = true);
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
-
     final id = widget.coin["tokenId"] ?? widget.coin["id"];
 
     final response = await http.post(
@@ -66,6 +99,8 @@ class _AddPortfolioTransactionScreenState
         "quantity": _quantityController.text,
       }),
     );
+
+    setState(() => isSubmitting = false);
 
     if (response.statusCode == 200) {
       Navigator.pop(context, true);
@@ -147,7 +182,7 @@ class _AddPortfolioTransactionScreenState
                     children: [
                       _label("Price per Token", theme),
                       const SizedBox(height: 6),
-                      _inputField(theme, _priceController),
+                      _inputField(theme, _priceController, readOnly: true),
                     ],
                   ),
                 ),
@@ -177,20 +212,30 @@ class _AddPortfolioTransactionScreenState
               height: 46,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0087E0),
+                  backgroundColor: const Color(0xFFEBB411),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                onPressed: _submitTransaction,
-                child: Text(
-                  "Add Transaction",
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                onPressed: isSubmitting ? null : _submitTransaction,
+                child:
+                    isSubmitting
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                        : Text(
+                          "Add Transaction",
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
               ),
             ),
           ],
@@ -210,9 +255,14 @@ class _AddPortfolioTransactionScreenState
     );
   }
 
-  TextField _inputField(ThemeData theme, TextEditingController controller) {
+  TextField _inputField(
+    ThemeData theme,
+    TextEditingController controller, {
+    bool readOnly = false,
+  }) {
     return TextField(
       controller: controller,
+      readOnly: readOnly,
       keyboardType: TextInputType.number,
       style: GoogleFonts.inter(textStyle: theme.textTheme.bodyMedium),
       cursorColor: theme.primaryColor,

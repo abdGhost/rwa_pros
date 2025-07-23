@@ -176,13 +176,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       body:
           _isLoading
               ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF0087E0)),
+                child: CircularProgressIndicator(color: Color(0xFFEBB411)),
               )
               : _coins.isEmpty
               ? _buildEmptyState(theme)
               : _buildPortfolioContent(context, theme),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF0087E0),
+        backgroundColor: const Color(0xFFEBB411),
         shape: const CircleBorder(),
         onPressed:
             () => Navigator.push(
@@ -268,7 +268,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0087E0),
+                      backgroundColor: const Color(0xFFEBB411),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -330,7 +330,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 child: Text(
                   "+Add Coin",
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF0087E0),
+                    color: const Color(0xFFEBB411),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -538,7 +538,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: const Color(0xFF0087E0),
+                color: const Color(0xFFEBB411),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
