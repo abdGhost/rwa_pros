@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart'; // Needed for opening links
 
 class HtmlContentModal extends StatefulWidget {
   final String title;
@@ -80,7 +81,22 @@ class _HtmlContentModalState extends State<HtmlContentModal> {
                       : SingleChildScrollView(
                         child: Html(
                           data: htmlData ?? "<p>No data available</p>",
-                          style: {"a": Style(color: const Color(0xFFEBB411))},
+                          style: {
+                            "a": Style(
+                              color: const Color(0xFFEBB411),
+                              textDecoration: TextDecoration.underline,
+                            ),
+                          },
+                          onLinkTap: (String? url, _, __) {
+                            if (url == null) return;
+                            final uri = Uri.tryParse(url);
+                            if (uri != null) {
+                              launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                          },
                         ),
                       ),
             ),
