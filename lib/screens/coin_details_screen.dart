@@ -245,10 +245,27 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
     }
   }
 
+  // Future<void> _shareCoin() async {
+  //   if (coin == null) return;
+  //   final message =
+  //       'Check out ${coin?['name']} (${coin?['symbol']?.toUpperCase()})!\nPrice: \$${coin?['market_data']['current_price']['usd']}';
+  //   await Share.share(message);
+  // }
+
   Future<void> _shareCoin() async {
     if (coin == null) return;
+    final id = coin?['id'];
+
+    final name = coin?['name'];
+    final symbol = coin?['symbol']?.toUpperCase();
+    final price = coin?['market_data']['current_price']['usd'];
+    final website = 'https://rwapros.com/tokendetails/$id';
+
     final message =
-        'Check out ${coin?['name']} (${coin?['symbol']?.toUpperCase()})!\nPrice: \$${coin?['market_data']['current_price']['usd']}';
+        'Check out $name ($symbol)!\n'
+        'Price: \$$price\n'
+        'Learn more: $website';
+
     await Share.share(message);
   }
 
