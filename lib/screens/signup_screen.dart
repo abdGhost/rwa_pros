@@ -111,7 +111,7 @@ class _SignupScreenState extends State<SignupScreen> {
               const AuthDivider(),
               const SizedBox(height: 20),
 
-              _label("Email Address", textTheme),
+              _label("Email", textTheme),
               const SizedBox(height: 2),
               CustomTextField(
                 controller: _emailController,
@@ -135,7 +135,7 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(height: 2),
               CustomTextField(
                 controller: _passwordController,
-                hint: 'Enter your password',
+                hint: 'Enter password',
                 obscure: _obscurePassword,
                 borderColor: borderColor,
                 borderWidth: 0.6,

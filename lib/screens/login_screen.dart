@@ -263,9 +263,83 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _showForgotPasswordDialog() {
+    final TextEditingController _resetEmailController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? Colors.white : Colors.black12;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Reset Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Email Address"),
+                const SizedBox(height: 4),
+                CustomTextField(
+                  controller: _resetEmailController,
+                  hint: "example@gmail.com",
+                  borderColor: borderColor,
+                  borderWidth: 0.6,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryLight,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Send'),
+                onPressed: () async {
+                  final email = _resetEmailController.text.trim();
+                  if (email.isEmpty) {
+                    _showSnackBar("Email is required");
+                    return;
+                  }
+
+                  Navigator.pop(context); // Close dialog
+
+                  try {
+                    final response = await http.post(
+                      Uri.parse(
+                        'https://rwa-f1623a22e3ed.herokuapp.com/api/users/forgot-password',
+                      ),
+                      headers: {'Content-Type': 'application/json'},
+                      body: jsonEncode({'email': email}),
+                    );
+
+                    final json = jsonDecode(response.body);
+                    if (response.statusCode == 200 && json['status'] == true) {
+                      _showSnackBar("Reset instructions sent to your email");
+                    } else {
+                      _showSnackBar(
+                        json['message'] ?? "Failed to send reset email",
+                      );
+                    }
+                  } catch (e) {
+                    _showSnackBar("Something went wrong");
+                    debugPrint("Forgot Password API error: $e");
+                  }
+                },
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? Colors.white : Colors.black12;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: const BackTitleAppBar(title: 'Login'),
@@ -292,22 +366,39 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               const AuthDivider(),
               const SizedBox(height: 20),
-              const Text("Email Address"),
+              Text(
+                "Email",
+                style: textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
               CustomTextField(
                 controller: _emailController,
                 hint: "example@gmail.com",
+                borderColor: borderColor,
+                borderWidth: 0.6,
               ),
-              const SizedBox(height: 16),
-              const Text("Password"),
+
+              const SizedBox(height: 14),
+              Text(
+                "Password",
+                style: textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
               CustomTextField(
                 controller: _passwordController,
                 hint: "Enter your password",
                 obscure: _obscurePassword,
+                borderColor: borderColor,
+                borderWidth: 0.6,
                 suffix: IconButton(
                   icon: Icon(
                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
                     size: 20,
-                    color: Colors.grey,
+                    color: borderColor,
                   ),
                   onPressed: () {
                     setState(() {
@@ -316,16 +407,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
               ),
-              // Align(
-              //   alignment: Alignment.centerRight,
-              //   child: TextButton(
-              //     onPressed: () {},
-              //     child: const Text(
-              //       "Forget Password?",
-              //       style: TextStyle(color: AppColors.primaryLight),
-              //     ),
-              //   ),
-              // ),
+
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _showForgotPasswordDialog,
+                  child: const Text(
+                    "Forget Password?",
+                    style: TextStyle(color: AppColors.primaryLight),
+                  ),
+                ),
+              ),
               const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
