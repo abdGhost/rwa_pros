@@ -106,7 +106,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> fetchInitialData(int index) async {
     setState(() => _isLoading = true);
-    await fetchTreasuryData();
 
     try {
       final highlight = await _apiService.fetchHighlightData();
@@ -154,6 +153,8 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       print("❌ fetchInitialData Error: $e");
     }
+
+    await fetchTreasuryData(); // Move here so it's shown after loading other data
 
     if (!mounted) return;
     setState(() => _isLoading = false);
