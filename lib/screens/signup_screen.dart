@@ -36,9 +36,21 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
 
   Future<void> sendFcmTokenToBackend(String jwtToken) async {
+    final prefs = await SharedPreferences.getInstance();
     final fcmToken = await FirebaseMessaging.instance.getToken();
-    if (fcmToken == null) {
-      debugPrint("❌ FCM token is null, cannot send to backend.");
+    final savedFcmToken = prefs.getString('fcm_token');
+
+    debugPrint('📦 Stored FCM Token: $savedFcmToken');
+    debugPrint('📲 Current FCM Token: $fcmToken');
+    debugPrint('🔐 JWT Token: $jwtToken');
+
+    if (fcmToken == null || jwtToken.isEmpty) {
+      debugPrint("❌ Cannot send FCM token. Token or JWT missing.");
+      return;
+    }
+
+    if (fcmToken == savedFcmToken) {
+      debugPrint("⏩ FCM token already sent. Skipping...");
       return;
     }
 
@@ -52,14 +64,14 @@ class _SignupScreenState extends State<SignupScreen> {
         body: jsonEncode({'token': fcmToken}),
       );
 
-      print('FCM TOKEN SEND ____________________${response.body}');
+      print('📡 FCM Token Upload Response: ${response.statusCode}');
+      print('📡 FCM Token Upload Body: ${response.body}');
 
-      if (response.statusCode == 201) {
-        debugPrint("✅ FCM token sent successfully with auth.");
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await prefs.setString('fcm_token', fcmToken);
+        debugPrint("✅ FCM token sent and stored locally.");
       } else {
-        debugPrint(
-          "⚠️ Failed to send FCM token: ${response.statusCode} ${response.body}",
-        );
+        debugPrint("⚠️ Failed to send FCM token: ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("❌ Exception sending FCM token: $e");
