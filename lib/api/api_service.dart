@@ -190,12 +190,15 @@ class ApiService {
   Future<List<Coin>> fetchWatchlists() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
+    print(token);
 
     if (token == null || token.isEmpty) {
       throw Exception("No access token found.");
     }
 
-    final url = Uri.parse("$_baseUrl/mobile/currencies/watchlist");
+    final url = Uri.parse(
+      "https://rwa-f1623a22e3ed.herokuapp.com/api/mobile/currencies/watchlist",
+    );
     final response = await http.get(
       url,
       headers: {
@@ -203,6 +206,8 @@ class ApiService {
         'Content-Type': 'application/json',
       },
     );
+
+    print('WATCH LIST API , ${response.body}');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);

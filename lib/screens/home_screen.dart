@@ -205,7 +205,18 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _onTabChanged(int index) async {
-    if (_selectedTabIndex == index) return;
+    if (_selectedTabIndex == index) {
+      if (index == 2) {
+        setState(() => _isLoading = true);
+        final loggedIn = await isUserLoggedIn();
+        _showLoginButton = !loggedIn;
+        favCoin = loggedIn ? await _apiService.fetchWatchlists() : [];
+        displayedCoins =
+            loggedIn ? favCoin : []; // ✅ Clear data if not logged in
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
 
     setState(() {
       _selectedTabIndex = index;
@@ -232,8 +243,15 @@ class _HomeScreenState extends State<HomeScreen>
         case 2:
           final loggedIn = await isUserLoggedIn();
           _showLoginButton = !loggedIn;
-          favCoin = loggedIn ? await _apiService.fetchWatchlists() : [];
+          try {
+            favCoin = loggedIn ? await _apiService.fetchWatchlists() : [];
+          } catch (e) {
+            print("❌ fetchWatchlists Error: $e");
+            favCoin = []; // clear old data if fetch fails
+          }
+          displayedCoins = loggedIn ? favCoin : [];
           break;
+
         case 3:
           displayedCoins = await _apiService.fetchTrendingCoins();
           break;
@@ -559,6 +577,66 @@ class _HomeScreenState extends State<HomeScreen>
                               );
                             },
                           )
+                      : _selectedTabIndex == 2 && _showLoginButton
+                      ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.lock_outline,
+                                size: 60,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Login to view your watchlist',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 20),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFEBB411),
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const OnboardingScreen(),
+                                    ),
+                                  );
+                                },
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 40,
+                                    vertical: 4,
+                                  ),
+                                  child: Text(
+                                    'Login',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      : displayedCoins.isEmpty && _selectedTabIndex == 2
+                      ? Center(
+                        child: Text(
+                          'No coin yet added',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      )
                       : RefreshIndicator(
                         color: const Color(0xFFEBB411),
                         onRefresh: () async {
