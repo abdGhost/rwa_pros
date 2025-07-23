@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:rwa_app/screens/coin_detail_widget/watchlist_mixin.dart';
+import 'package:flutter_html/flutter_html.dart';
 
 class CoinDetailScreen extends StatefulWidget {
   final Coin coindetils;
@@ -51,6 +52,10 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
   int _selectedTab = 0; // For tab highlight
   int totalRating = 0;
   int? rank;
+
+  bool _isHtmlExpanded = false;
+  String _truncatedHtml = '';
+  String _fullHtml = '';
 
   @override
   void initState() {
@@ -180,6 +185,11 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
     });
   }
 
+  String _truncateHtmlRaw(String html, int maxChars) {
+    if (html.length <= maxChars) return html;
+    return html.substring(0, maxChars).trim() + '...';
+  }
+
   Future<void> _fetchCoinDetails() async {
     final detailUrl = Uri.parse(
       'https://rwa-f1623a22e3ed.herokuapp.com/api/currencies/rwa/coin/${widget.coin}',
@@ -223,6 +233,8 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
           final encoder = JsonEncoder.withIndent('  ');
           // debugPrint('🪙 Full Coin Data:\n${encoder.convert(detailJson)}');
         });
+        _fullHtml = coinData['description']?['en'] ?? '';
+        _truncatedHtml = _truncateHtmlRaw(_fullHtml, 300); // Adjust char limit
       } else {
         print('❌ Failed to fetch details or chart');
         setState(() => isLoading = false);
@@ -607,7 +619,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                                 size: 36,
                                 color:
                                     isSelected
-                                        ? const Color(0xFF0087E0)
+                                        ? const Color(0xFFEBB411)
                                         : Colors.grey,
                               ),
                               onPressed: () {
@@ -630,7 +642,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                                 });
                               },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0087E0),
+                        backgroundColor: const Color(0xFFEBB411),
                         minimumSize: const Size.fromHeight(45),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -648,7 +660,10 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
                                   strokeWidth: 2.5,
                                 ),
                               )
-                              : const Text('Submit Rating'),
+                              : const Text(
+                                'Submit Rating',
+                                style: TextStyle(color: Colors.white),
+                              ),
                     ),
                   ],
                 ),
@@ -911,8 +926,9 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
   }
 
   Widget _buildDescSection(ThemeData theme) {
-    final about = coin?['description']?['en'] ?? '';
-    if (about.isEmpty) return const SizedBox.shrink();
+    if (_fullHtml.isEmpty) return const SizedBox.shrink();
+
+    final htmlToRender = _isHtmlExpanded ? _fullHtml : _truncatedHtml;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -925,57 +941,148 @@ class _CoinDetailScreenState extends State<CoinDetailScreen>
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 4),
-          AnimatedCrossFade(
-            firstChild: Text(
-              about,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontSize: 12,
-                height: 1.5,
+
+          // const SizedBox(height: 8),
+          Html(
+            data: htmlToRender,
+            style: {
+              "body": Style(
+                fontSize: FontSize(12),
                 color:
                     theme.brightness == Brightness.dark
                         ? Colors.white
                         : Colors.black,
+                lineHeight: LineHeight(1.5),
+                margin: Margins.zero,
+                padding: HtmlPaddings.zero,
               ),
-            ),
-            secondChild: Text(
-              about,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontSize: 12,
-                height: 1.5,
-                color:
-                    theme.brightness == Brightness.dark
-                        ? Colors.white
-                        : Colors.black,
-              ),
-            ),
-            crossFadeState:
-                _isExpanded
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 300),
+            },
           ),
-          const SizedBox(height: 8),
+
           GestureDetector(
             onTap: () {
-              setState(() => _isExpanded = !_isExpanded);
+              setState(() => _isHtmlExpanded = !_isHtmlExpanded);
             },
             child: Text(
-              _isExpanded ? 'Show less' : 'Read more',
-              style: TextStyle(
-                color: const Color(0xFFEBB411),
+              _isHtmlExpanded ? 'Show less' : 'Read more',
+              style: const TextStyle(
+                color: Color(0xFFEBB411),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
             ),
           ),
-          const SizedBox(height: 16),
+
+          // const SizedBox(height: 16),
         ],
       ),
     );
   }
+
+  // Widget _buildDescSection(ThemeData theme) {
+  //   final about = coin?['description']?['en'] ?? '';
+  //   if (about.isEmpty) return const SizedBox.shrink();
+
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(horizontal: 16),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         Text(
+  //           'Description',
+  //           style: theme.textTheme.titleMedium?.copyWith(
+  //             fontWeight: FontWeight.bold,
+  //           ),
+  //         ),
+  //         const SizedBox(height: 4),
+  //         AnimatedCrossFade(
+  //           firstChild: Html(
+  //             data: about,
+  //             style: {
+  //               "body": Style(
+  //                 fontSize: FontSize(12),
+  //                 color:
+  //                     theme.brightness == Brightness.dark
+  //                         ? Colors.white
+  //                         : Colors.black,
+  //                 lineHeight: LineHeight(1.5),
+  //                 margin: EdgeInsets.zero,
+  //                 padding: EdgeInsets.zero,
+  //               ),
+  //             },
+  //           ),
+  //           secondChild: Html(
+  //             data: about,
+  //             style: {
+  //               "body": Style(
+  //                 fontSize: FontSize(12),
+  //                 color:
+  //                     theme.brightness == Brightness.dark
+  //                         ? Colors.white
+  //                         : Colors.black,
+  //                 lineHeight: LineHeight(1.5),
+  //                 margin: EdgeInsets.zero,
+  //                 padding: EdgeInsets.zero,
+  //               ),
+  //             },
+  //           ),
+  //           crossFadeState:
+  //               _isExpanded
+  //                   ? CrossFadeState.showSecond
+  //                   : CrossFadeState.showFirst,
+  //           duration: const Duration(milliseconds: 300),
+  //         ),
+
+  //         // AnimatedCrossFade(
+  //         //   firstChild: Text(
+  //         //     about,
+  //         //     maxLines: 8,
+  //         //     overflow: TextOverflow.ellipsis,
+  //         //     style: theme.textTheme.bodyMedium?.copyWith(
+  //         //       fontSize: 12,
+  //         //       height: 1.5,
+  //         //       color:
+  //         //           theme.brightness == Brightness.dark
+  //         //               ? Colors.white
+  //         //               : Colors.black,
+  //         //     ),
+  //         //   ),
+  //         //   secondChild: Text(
+  //         //     about,
+  //         //     style: theme.textTheme.bodyMedium?.copyWith(
+  //         //       fontSize: 12,
+  //         //       height: 1.5,
+  //         //       color:
+  //         //           theme.brightness == Brightness.dark
+  //         //               ? Colors.white
+  //         //               : Colors.black,
+  //         //     ),
+  //         //   ),
+  //         //   crossFadeState:
+  //         //       _isExpanded
+  //         //           ? CrossFadeState.showSecond
+  //         //           : CrossFadeState.showFirst,
+  //         //   duration: const Duration(milliseconds: 300),
+  //         // ),
+  //         const SizedBox(height: 8),
+  //         GestureDetector(
+  //           onTap: () {
+  //             setState(() => _isExpanded = !_isExpanded);
+  //           },
+  //           child: Text(
+  //             _isExpanded ? 'Show less' : 'Read more',
+  //             style: TextStyle(
+  //               color: const Color(0xFFEBB411),
+  //               fontWeight: FontWeight.w600,
+  //               fontSize: 12,
+  //             ),
+  //           ),
+  //         ),
+  //         const SizedBox(height: 16),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildExpertSection(ThemeData theme) {
     if (expertReviews.isEmpty) return SizedBox.shrink();
