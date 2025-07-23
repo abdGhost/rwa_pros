@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:rwa_app/screens/html_content_modal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:http/http.dart' as http;
@@ -338,6 +340,7 @@ class OnboardingScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 20),
+
                   Text.rich(
                     TextSpan(
                       text: 'By proceeding, you agree to Condo’s ',
@@ -351,6 +354,20 @@ class OnboardingScreen extends StatelessWidget {
                             decorationThickness: 1.5,
                             color: primaryColor,
                           ),
+                          recognizer:
+                              TapGestureRecognizer()
+                                ..onTap = () {
+                                  showDialog(
+                                    context: context,
+                                    builder:
+                                        (_) => HtmlContentModal(
+                                          title: "Terms of Service",
+                                          apiUrl:
+                                              "https://rwa-f1623a22e3ed.herokuapp.com/api/admin/term/service",
+                                          contentKey: "service",
+                                        ),
+                                  );
+                                },
                         ),
                         const TextSpan(text: ' and '),
                         TextSpan(
@@ -361,11 +378,53 @@ class OnboardingScreen extends StatelessWidget {
                             decorationThickness: 1.5,
                             color: primaryColor,
                           ),
+                          recognizer:
+                              TapGestureRecognizer()
+                                ..onTap = () {
+                                  showDialog(
+                                    context: context,
+                                    builder:
+                                        (_) => HtmlContentModal(
+                                          title: "Privacy Policy",
+                                          apiUrl:
+                                              "https://rwa-f1623a22e3ed.herokuapp.com/api/admin/term/privacy",
+                                          contentKey: "privacy",
+                                        ),
+                                  );
+                                },
                         ),
                       ],
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  // Text.rich(
+                  //   TextSpan(
+                  //     text: 'By proceeding, you agree to Condo’s ',
+                  //     style: TextStyle(fontSize: 10, color: textColor),
+                  //     children: [
+                  //       TextSpan(
+                  //         text: 'Terms of Service',
+                  //         style: TextStyle(
+                  //           decoration: TextDecoration.underline,
+                  //           decorationColor: primaryColor,
+                  //           decorationThickness: 1.5,
+                  //           color: primaryColor,
+                  //         ),
+                  //       ),
+                  //       const TextSpan(text: ' and '),
+                  //       TextSpan(
+                  //         text: 'Privacy Policy',
+                  //         style: TextStyle(
+                  //           decoration: TextDecoration.underline,
+                  //           decorationColor: primaryColor,
+                  //           decorationThickness: 1.5,
+                  //           color: primaryColor,
+                  //         ),
+                  //       ),
+                  //     ],
+                  //   ),
+                  //   textAlign: TextAlign.center,
+                  // ),
                 ],
               ),
             ),
