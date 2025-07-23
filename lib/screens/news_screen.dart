@@ -86,6 +86,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 'updatedAt': news['updatedAt'],
                 'isFeatured': true, // force-marked
                 'slug': news['slug'],
+                'views': news['views'] ?? 0,
               };
             }).toList();
       }
@@ -116,6 +117,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 'updatedAt': news['updatedAt'],
                 'isFeatured': news['isFeatured'] ?? false,
                 'slug': news['slug'],
+                'views': news['views'] ?? 0,
               };
             }).toList();
 

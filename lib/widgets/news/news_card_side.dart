@@ -152,6 +152,26 @@ class NewsCardSide extends StatelessWidget {
                             ),
                           ),
                         ],
+
+                        Spacer(),
+
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.remove_red_eye,
+                              size: 16,
+                              color: Color(0xFFEBB411),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${item['views']}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFEBB411),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ],
