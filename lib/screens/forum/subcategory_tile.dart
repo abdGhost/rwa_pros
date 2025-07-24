@@ -8,6 +8,7 @@ class SubCategoryTile extends StatelessWidget {
   final DateTime createdAt;
   final String author;
   final bool isLast;
+  final VoidCallback? onTap; // <-- New field for tap callback
 
   const SubCategoryTile({
     super.key,
@@ -17,6 +18,7 @@ class SubCategoryTile extends StatelessWidget {
     required this.createdAt,
     required this.author,
     this.isLast = false,
+    this.onTap,
   });
 
   String formatTimeAgo(DateTime dateTime) {
@@ -44,69 +46,72 @@ class SubCategoryTile extends StatelessWidget {
     final timeAgo = formatTimeAgo(createdAt);
     final theme = Theme.of(context);
 
-    return Column(
-      children: [
-        ListTile(
-          leading: ClipOval(
-            child: Image.network(
-              imageUrl,
-              width: 36,
-              height: 36,
-              fit: BoxFit.cover,
-              errorBuilder:
-                  (context, error, stackTrace) => const Icon(
-                    Icons.broken_image,
-                    size: 30,
-                    color: Colors.grey,
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        children: [
+          ListTile(
+            leading: ClipOval(
+              child: Image.network(
+                imageUrl,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (context, error, stackTrace) => const Icon(
+                      Icons.broken_image,
+                      size: 30,
+                      color: Colors.grey,
+                    ),
+              ),
+            ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    height: 1,
+                    color:
+                        theme.brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  contentTitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    height: 1,
+                    color:
+                        theme.brightness == Brightness.dark
+                            ? Colors.white70
+                            : Colors.black,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$timeAgo · $author',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
             ),
           ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  height: 1,
-                  color:
-                      theme.brightness == Brightness.dark
-                          ? Colors.white
-                          : Colors.black,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                contentTitle,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  height: 1,
-                  color:
-                      theme.brightness == Brightness.dark
-                          ? Colors.white70
-                          : Colors.black,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$timeAgo · $author',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (!isLast) const Divider(height: 1, thickness: 0.4),
-      ],
+          if (!isLast) const Divider(height: 1, thickness: 0.4),
+        ],
+      ),
     );
   }
 }

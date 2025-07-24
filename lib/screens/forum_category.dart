@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:rwa_app/screens/form_thread_screen.dart';
 import 'package:rwa_app/screens/forum/category_modal.dart';
 import 'package:rwa_app/screens/forum/hot_topic_modal.dart';
 import 'package:rwa_app/screens/forum/subcategory_tile.dart';
@@ -96,7 +97,7 @@ class _ForumCategoryState extends State<ForumCategory> {
               ),
               const SizedBox(height: 10),
               ...hotTopics
-                  .take(5)
+                  .take(10)
                   .map(
                     (topic) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -374,27 +375,71 @@ class _ForumCategoryState extends State<ForumCategory> {
                                   color: Colors.white,
                                   child: Column(
                                     children:
-                                        category.subCategories
-                                            .asMap()
-                                            .entries
-                                            .map((subEntry) {
-                                              final subIndex = subEntry.key;
-                                              final sub = subEntry.value;
-                                              return SubCategoryTile(
-                                                imageUrl: sub.imageUrl,
-                                                title: sub.name,
-                                                contentTitle: sub.description,
-                                                createdAt: sub.createdAt,
-                                                author: "Admin",
-                                                isLast:
-                                                    subIndex ==
-                                                    category
-                                                            .subCategories
-                                                            .length -
-                                                        1,
+                                        category.subCategories.asMap().entries.map((
+                                          subEntry,
+                                        ) {
+                                          final subIndex = subEntry.key;
+                                          final sub = subEntry.value;
+                                          // return SubCategoryTile(
+                                          //   imageUrl: sub.imageUrl,
+                                          //   title: sub.name,
+                                          //   contentTitle: sub.description,
+                                          //   createdAt: sub.createdAt,
+                                          //   author: "Admin",
+                                          //   isLast:
+                                          //       subIndex ==
+                                          //       category.subCategories.length -
+                                          //           1,
+                                          //   onTap: () {
+                                          //     print("Subcategory tapped:");
+                                          //     print("ID: ${sub.id}");
+                                          //     print("Name: ${sub.name}");
+                                          //     print(
+                                          //       "Description: ${sub.description}",
+                                          //     );
+                                          //     print(
+                                          //       "Image URL: ${sub.imageUrl}",
+                                          //     );
+                                          //     print(
+                                          //       "Created At: ${sub.createdAt}",
+                                          //     );
+                                          //   },
+                                          // );
+                                          return SubCategoryTile(
+                                            imageUrl: sub.imageUrl,
+                                            title: sub.name,
+                                            contentTitle: sub.description,
+                                            createdAt: sub.createdAt,
+                                            author: "Admin",
+                                            isLast:
+                                                subIndex ==
+                                                category.subCategories.length -
+                                                    1,
+                                            onTap: () {
+                                              print(
+                                                "Navigating to ForumThreadScreen...",
                                               );
-                                            })
-                                            .toList(),
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder:
+                                                      (_) => ForumThreadScreen(
+                                                        forumData: {
+                                                          'id':
+                                                              sub.id, // SubCategory ID
+                                                          'name': sub.name,
+                                                          'description':
+                                                              sub.description,
+                                                          'categoryId':
+                                                              category
+                                                                  .id, // Parent Category ID
+                                                        },
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        }).toList(),
                                   ),
                                 ),
                               ),
