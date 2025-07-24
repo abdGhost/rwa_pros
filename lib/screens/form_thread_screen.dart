@@ -49,6 +49,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
   @override
   void dispose() {
+    socket.disconnect();
     socket.dispose();
     super.dispose();
   }
@@ -66,7 +67,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .setQuery({'token': token})
-          .disableAutoConnect()
+          // .disableAutoConnect()
           .build(),
     );
 
@@ -449,8 +450,8 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        socket.dispose();
         socket.disconnect();
+        socket.dispose();
         Navigator.pop(context, true); // signal parent to reconnect
         return false;
       },

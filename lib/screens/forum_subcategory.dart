@@ -21,9 +21,6 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
   bool isLoading = true;
   late IO.Socket socket;
 
-  String token = '';
-  String userId = '';
-
   @override
   void initState() {
     super.initState();
@@ -42,67 +39,90 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
   }
 
   Future<void> _loadTokenAndFetch() async {
-    final prefs = await SharedPreferences.getInstance();
-    token = prefs.getString('token') ?? '';
-    userId = prefs.getString('userId') ?? '';
     fetchSubcategories();
   }
 
   void _initSocket() {
     socket = IO.io(
       'https://rwa-f1623a22e3ed.herokuapp.com',
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .setQuery({'token': token})
-          // .disableAutoConnect()
-          .build(),
+      IO.OptionBuilder().setTransports(['websocket']).build(),
     );
 
     socket.connect();
 
     socket.onConnect((_) {
-      print('Socket connected ✅');
+      print('✅ [Subcategory] Socket connected');
       socket.emit('joinCategory', {'categoryId': widget.categoryData['id']});
     });
 
-    socket.on('reactToForumForSubCategoryPage', (data) {
-      print('reactToForumForSubCategoryPage ===============> ,$data');
+    socket.onConnectError((err) {
+      print('❌ [Subcategory] Connect error: $err');
+    });
 
-      final subCategoryId = data['subCategoryId'];
-      final forumId = data['forumId'];
-      final emoji = data['emoji'];
-      final action = data['action'];
-
-      setState(() {
-        final index = subcategories.indexWhere(
-          (s) => s['_id'] == subCategoryId,
-        );
-        if (index != -1) {
-          final sub = subcategories[index];
-
-          if (emoji == '👍') {
-            if (action == 'Added') {
-              sub['totalLikes'] = (sub['totalLikes'] ?? 0) + 1;
-            } else if (action == 'Remove') {
-              sub['totalLikes'] = (sub['totalLikes'] ?? 1) - 1;
-            }
-          } else if (emoji == '👎') {
-            if (action == 'Added') {
-              sub['totalDislikes'] = (sub['totalDislikes'] ?? 0) + 1;
-            } else if (action == 'Remove') {
-              sub['totalDislikes'] = (sub['totalDislikes'] ?? 1) - 1;
-            }
-          }
-
-          subcategories[index] = sub;
-        }
-      });
+    socket.onError((err) {
+      print('❌ [Subcategory] General socket error: $err');
     });
 
     socket.onDisconnect((_) {
-      print('Socket disconnected ❌');
+      print('🔌 [Subcategory] Socket disconnected');
     });
   }
+
+  // void _initSocket() {
+  //   socket = IO.io(
+  //     'https://rwa-f1623a22e3ed.herokuapp.com',
+  //     IO.OptionBuilder()
+  //         .setTransports(['websocket'])
+  //         .setQuery({'token': token})
+  //         // .disableAutoConnect()
+  //         .build(),
+  //   );
+
+  //   socket.connect();
+
+  //   socket.onConnect((_) {
+  //     print('Socket connected ✅');
+  //     socket.emit('joinCategory', {'categoryId': widget.categoryData['id']});
+  //   });
+
+  //   socket.on('reactToForumForSubCategoryPage', (data) {
+  //     print('reactToForumForSubCategoryPage ===============> ,$data');
+
+  //     final subCategoryId = data['subCategoryId'];
+  //     final forumId = data['forumId'];
+  //     final emoji = data['emoji'];
+  //     final action = data['action'];
+
+  //     setState(() {
+  //       final index = subcategories.indexWhere(
+  //         (s) => s['_id'] == subCategoryId,
+  //       );
+  //       if (index != -1) {
+  //         final sub = subcategories[index];
+
+  //         if (emoji == '👍') {
+  //           if (action == 'Added') {
+  //             sub['totalLikes'] = (sub['totalLikes'] ?? 0) + 1;
+  //           } else if (action == 'Remove') {
+  //             sub['totalLikes'] = (sub['totalLikes'] ?? 1) - 1;
+  //           }
+  //         } else if (emoji == '👎') {
+  //           if (action == 'Added') {
+  //             sub['totalDislikes'] = (sub['totalDislikes'] ?? 0) + 1;
+  //           } else if (action == 'Remove') {
+  //             sub['totalDislikes'] = (sub['totalDislikes'] ?? 1) - 1;
+  //           }
+  //         }
+
+  //         subcategories[index] = sub;
+  //       }
+  //     });
+  //   });
+
+  //   socket.onDisconnect((_) {
+  //     print('Socket disconnected ❌');
+  //   });
+  // }
 
   Future<void> fetchSubcategories() async {
     setState(() => isLoading = true);
@@ -357,6 +377,12 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
 
                         // ✅ Reconnect socket if result is true
                         if (result == true) {
+                          print(
+                            '🔁 Returning from ForumThreadScreen, reconnecting socket',
+                          );
+                          await Future.delayed(
+                            const Duration(milliseconds: 100),
+                          );
                           _initSocket();
                         }
                       },
