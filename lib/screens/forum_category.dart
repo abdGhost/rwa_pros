@@ -118,21 +118,29 @@ class _ForumCategoryState extends State<ForumCategory> {
                   .map(
                     (topic) => GestureDetector(
                       onTap: () {
+                        print('Tapped HotTopic:');
+                        print('ID: ${topic.id}');
+                        print('Title: ${topic.title}');
+                        print('User: ${topic.userName}');
+                        print('Comments: ${topic.commentsCount}');
+                        print('Category ID: ${topic.categoryId}');
+
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder:
                                 (_) => ForumThreadScreen(
                                   forumData: {
-                                    'id': topic.id,
+                                    'id': topic.categoryId,
                                     'name': topic.title,
                                     'description': topic.text ?? '',
-                                    'categoryId': topic.categoryId ?? '',
+                                    'categoryId': topic.id,
                                   },
                                 ),
                           ),
                         );
                       },
+
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Row(
@@ -229,7 +237,7 @@ class _ForumCategoryState extends State<ForumCategory> {
                     (thread) => GestureDetector(
                       onTap: () {
                         print('Tapped RecentThread:');
-                        print('ID: ${thread.id}');
+                        print('Subcategory: ${thread.id}');
                         print('Title: ${thread.title}');
                         print('User: ${thread.userName}');
                         print('Comments: ${thread.commentsCount}');
