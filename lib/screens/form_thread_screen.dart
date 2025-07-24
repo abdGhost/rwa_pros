@@ -307,9 +307,23 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
     }
   }
 
+  Map<int, DateTime> tapTimestamps = {};
+
+  bool canTap(int index) {
+    final now = DateTime.now();
+    final lastTap = tapTimestamps[index];
+
+    if (lastTap != null && now.difference(lastTap) < Duration(seconds: 1)) {
+      return false;
+    }
+
+    tapTimestamps[index] = now;
+    return true;
+  }
+
   Future<void> reactToThread(String forumId, int index) async {
-    if (token.isEmpty || lockedIndexes.contains(index)) {
-      print('🚫 Skipping like, locked or no token for index $index');
+    if (!canTap(index)) {
+      print('⏳ Tap too fast, skipping for index $index');
       return;
     }
 
@@ -386,8 +400,8 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   }
 
   Future<void> dislikeToThread(String forumId, int index) async {
-    if (token.isEmpty || lockedIndexes.contains(index)) {
-      print('🚫 Skipping dislike, locked or no token for index $index');
+    if (!canTap(index)) {
+      print('⏳ Tap too fast, skipping for index $index');
       return;
     }
 
