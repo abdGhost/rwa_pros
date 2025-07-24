@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:rwa_app/screens/add_thread_screen.dart';
 import 'package:rwa_app/screens/thread_details_screen.dart';
+import 'dart:math'; // place at top of your file
 
 class ForumThreadScreen extends StatefulWidget {
   final Map<String, dynamic> forumData;
@@ -308,21 +309,29 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
   Future<void> reactToThread(String forumId, int index) async {
     if (token.isEmpty || lockedIndexes.contains(index)) {
+      print('🚫 Skipping like, locked or no token for index $index');
       return;
     }
 
-    lockedIndexes.add(index); // 🔒 Lock
+    lockedIndexes.add(index);
 
     final isLiked = likedList[index];
 
     setState(() {
       likedList[index] = !isLiked;
-      threads[index]['likes'] =
-          (threads[index]['likes'] ?? 0) + (!isLiked ? 1 : -1);
+
+      threads[index] = {
+        ...threads[index],
+        'likes': max(0, (threads[index]['likes'] ?? 0) + (!isLiked ? 1 : -1)),
+      };
 
       if (!isLiked && dislikedList[index]) {
         dislikedList[index] = false;
-        threads[index]['dislikes'] = (threads[index]['dislikes'] ?? 1) - 1;
+
+        threads[index] = {
+          ...threads[index],
+          'dislikes': max(0, (threads[index]['dislikes'] ?? 1) - 1),
+        };
       }
     });
 
@@ -345,51 +354,65 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         socket.emit('reactThread', {"forumId": forumId});
       } else {
-        setState(() {
-          likedList[index] = isLiked;
-          threads[index]['likes'] =
-              (threads[index]['likes'] ?? 0) + (isLiked ? 1 : -1);
-
-          if (!isLiked && dislikedList[index]) {
-            dislikedList[index] = true;
-            threads[index]['dislikes'] = (threads[index]['dislikes'] ?? 0) + 1;
-          }
-        });
+        print('❌ Server error, restoring like state');
+        revertLikeState(index, isLiked);
       }
     } catch (e) {
-      print('Error reacting: $e');
-      setState(() {
-        likedList[index] = isLiked;
-        threads[index]['likes'] =
-            (threads[index]['likes'] ?? 0) + (isLiked ? 1 : -1);
-
-        if (!isLiked && dislikedList[index]) {
-          dislikedList[index] = true;
-          threads[index]['dislikes'] = (threads[index]['dislikes'] ?? 0) + 1;
-        }
-      });
+      print('❌ Network error: $e');
+      revertLikeState(index, isLiked);
     } finally {
-      lockedIndexes.remove(index); // 🔓 Unlock
+      lockedIndexes.remove(index);
     }
+  }
+
+  void revertLikeState(int index, bool wasLiked) {
+    setState(() {
+      likedList[index] = wasLiked;
+
+      threads[index] = {
+        ...threads[index],
+        'likes': max(0, (threads[index]['likes'] ?? 0) + (wasLiked ? 1 : -1)),
+      };
+
+      if (!wasLiked && !dislikedList[index]) {
+        dislikedList[index] = true;
+
+        threads[index] = {
+          ...threads[index],
+          'dislikes': (threads[index]['dislikes'] ?? 0) + 1,
+        };
+      }
+    });
   }
 
   Future<void> dislikeToThread(String forumId, int index) async {
     if (token.isEmpty || lockedIndexes.contains(index)) {
+      print('🚫 Skipping dislike, locked or no token for index $index');
       return;
     }
 
-    lockedIndexes.add(index); // 🔒 Lock
+    lockedIndexes.add(index);
 
     final isDisliked = dislikedList[index];
 
     setState(() {
       dislikedList[index] = !isDisliked;
-      threads[index]['dislikes'] =
-          (threads[index]['dislikes'] ?? 0) + (!isDisliked ? 1 : -1);
+
+      threads[index] = {
+        ...threads[index],
+        'dislikes': max(
+          0,
+          (threads[index]['dislikes'] ?? 0) + (!isDisliked ? 1 : -1),
+        ),
+      };
 
       if (!isDisliked && likedList[index]) {
         likedList[index] = false;
-        threads[index]['likes'] = (threads[index]['likes'] ?? 1) - 1;
+
+        threads[index] = {
+          ...threads[index],
+          'likes': max(0, (threads[index]['likes'] ?? 1) - 1),
+        };
       }
     });
 
@@ -413,32 +436,38 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         socket.emit('reactThread', {"forumId": forumId});
       } else {
-        setState(() {
-          dislikedList[index] = isDisliked;
-          threads[index]['dislikes'] =
-              (threads[index]['dislikes'] ?? 0) + (isDisliked ? 1 : -1);
-
-          if (!isDisliked && likedList[index]) {
-            likedList[index] = true;
-            threads[index]['likes'] = (threads[index]['likes'] ?? 0) + 1;
-          }
-        });
+        print('❌ Server error, restoring dislike state');
+        revertDislikeState(index, isDisliked);
       }
     } catch (e) {
-      print('Error disliking: $e');
-      setState(() {
-        dislikedList[index] = isDisliked;
-        threads[index]['dislikes'] =
-            (threads[index]['dislikes'] ?? 0) + (isDisliked ? 1 : -1);
-
-        if (!isDisliked && likedList[index]) {
-          likedList[index] = true;
-          threads[index]['likes'] = (threads[index]['likes'] ?? 0) + 1;
-        }
-      });
+      print('❌ Network error: $e');
+      revertDislikeState(index, isDisliked);
     } finally {
-      lockedIndexes.remove(index); // 🔓 Unlock
+      lockedIndexes.remove(index);
     }
+  }
+
+  void revertDislikeState(int index, bool wasDisliked) {
+    setState(() {
+      dislikedList[index] = wasDisliked;
+
+      threads[index] = {
+        ...threads[index],
+        'dislikes': max(
+          0,
+          (threads[index]['dislikes'] ?? 0) + (wasDisliked ? 1 : -1),
+        ),
+      };
+
+      if (!wasDisliked && !likedList[index]) {
+        likedList[index] = true;
+
+        threads[index] = {
+          ...threads[index],
+          'likes': (threads[index]['likes'] ?? 0) + 1,
+        };
+      }
+    });
   }
 
   String removeEmptyBrParagraphAfterLists(String html) {
