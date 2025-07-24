@@ -8,7 +8,7 @@ class SubCategoryTile extends StatelessWidget {
   final DateTime createdAt;
   final String author;
   final bool isLast;
-  final VoidCallback? onTap; // <-- New field for tap callback
+  final VoidCallback? onTap;
 
   const SubCategoryTile({
     super.key,
@@ -27,12 +27,10 @@ class SubCategoryTile extends StatelessWidget {
 
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) {
+    if (diff.inHours < 24)
       return '${diff.inHours} hr${diff.inHours > 1 ? 's' : ''} ago';
-    }
-    if (diff.inDays < 30) {
+    if (diff.inDays < 30)
       return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
-    }
 
     final months = (diff.inDays / 30).floor();
     if (months < 12) return '$months month${months > 1 ? 's' : ''} ago';
@@ -43,8 +41,8 @@ class SubCategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeAgo = formatTimeAgo(createdAt);
     final theme = Theme.of(context);
+    final timeAgo = formatTimeAgo(createdAt);
 
     return InkWell(
       onTap: onTap,
@@ -58,10 +56,10 @@ class SubCategoryTile extends StatelessWidget {
                 height: 36,
                 fit: BoxFit.cover,
                 errorBuilder:
-                    (context, error, stackTrace) => const Icon(
+                    (context, error, stackTrace) => Icon(
                       Icons.broken_image,
                       size: 30,
-                      color: Colors.grey,
+                      color: theme.iconTheme.color?.withOpacity(0.6),
                     ),
               ),
             ),
@@ -73,43 +71,42 @@ class SubCategoryTile extends StatelessWidget {
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    height: 1,
-                    color:
-                        theme.brightness == Brightness.dark
-                            ? Colors.white
-                            : Colors.black,
+                    height: 1.1,
+                    color: theme.textTheme.bodyLarge?.color,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   contentTitle,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
-                    height: 1,
-                    color:
-                        theme.brightness == Brightness.dark
-                            ? Colors.white70
-                            : Colors.black,
+                    height: 1.2,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.85),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   '$timeAgo · $author',
                   style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.w400,
-                    color: Colors.grey.shade600,
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
                   ),
                 ),
               ],
             ),
           ),
-          if (!isLast) const Divider(height: 1, thickness: 0.4),
+          if (!isLast)
+            Divider(
+              height: 1,
+              thickness: 0.4,
+              color: theme.dividerColor.withOpacity(0.3),
+            ),
         ],
       ),
     );
