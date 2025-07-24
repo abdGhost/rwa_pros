@@ -105,7 +105,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       });
     });
 
-    socket.on('reactToForum', (data) async {
+    socket.on('reactToForumForDetailPage', (data) async {
       if (!mounted) return;
 
       print('🔔 reactToForum received: $data');

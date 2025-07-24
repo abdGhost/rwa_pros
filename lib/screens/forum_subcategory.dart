@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:rwa_app/screens/form_thread_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class ForumSubcategory extends StatefulWidget {
   final Map<String, dynamic> categoryData;
@@ -17,11 +19,89 @@ class ForumSubcategory extends StatefulWidget {
 class _ForumSubcategoryState extends State<ForumSubcategory> {
   List<Map<String, dynamic>> subcategories = [];
   bool isLoading = true;
+  late IO.Socket socket;
+
+  String token = '';
+  String userId = '';
 
   @override
   void initState() {
     super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _loadTokenAndFetch(); // ensures token/userId loaded
+    _initSocket(); // socket now connects with correct userId
+  }
+
+  @override
+  void dispose() {
+    socket.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTokenAndFetch() async {
+    final prefs = await SharedPreferences.getInstance();
+    token = prefs.getString('token') ?? '';
+    userId = prefs.getString('userId') ?? '';
     fetchSubcategories();
+  }
+
+  void _initSocket() {
+    socket = IO.io(
+      'https://rwa-f1623a22e3ed.herokuapp.com',
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .setQuery({'token': token})
+          // .disableAutoConnect()
+          .build(),
+    );
+
+    socket.connect();
+
+    socket.onConnect((_) {
+      print('Socket connected ✅');
+      socket.emit('joinCategory', {'categoryId': widget.categoryData['id']});
+    });
+
+    socket.on('reactToForumForSubCategoryPage', (data) {
+      print('reactToForumForSubCategoryPage ===============> ,$data');
+
+      final subCategoryId = data['subCategoryId'];
+      final forumId = data['forumId'];
+      final emoji = data['emoji'];
+      final action = data['action'];
+
+      setState(() {
+        final index = subcategories.indexWhere(
+          (s) => s['_id'] == subCategoryId,
+        );
+        if (index != -1) {
+          final sub = subcategories[index];
+
+          if (emoji == '👍') {
+            if (action == 'Added') {
+              sub['totalLikes'] = (sub['totalLikes'] ?? 0) + 1;
+            } else if (action == 'Remove') {
+              sub['totalLikes'] = (sub['totalLikes'] ?? 1) - 1;
+            }
+          } else if (emoji == '👎') {
+            if (action == 'Added') {
+              sub['totalDislikes'] = (sub['totalDislikes'] ?? 0) + 1;
+            } else if (action == 'Remove') {
+              sub['totalDislikes'] = (sub['totalDislikes'] ?? 1) - 1;
+            }
+          }
+
+          subcategories[index] = sub;
+        }
+      });
+    });
+
+    socket.onDisconnect((_) {
+      print('Socket disconnected ❌');
+    });
   }
 
   Future<void> fetchSubcategories() async {
@@ -40,7 +120,7 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        print('✅ API Response: ${jsonEncode(jsonResponse)}');
+        // print('✅ API Response: ${jsonEncode(jsonResponse)}');
 
         if (jsonResponse is List) {
           subcategories = List<Map<String, dynamic>>.from(
@@ -254,8 +334,11 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                           ],
                         ),
                       ),
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        socket.dispose(); // ✅ Fully dispose before navigating
+                        socket.destroy(); // ✅ Ensures it's dead
+
+                        final result = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder:
@@ -266,10 +349,16 @@ class _ForumSubcategoryState extends State<ForumSubcategory> {
                                     'description': sub['description'],
                                     'categoryImage': sub['subCategoryImage'],
                                     'createdAt': sub['createdAt'],
+                                    'categoryId': widget.categoryData['id'],
                                   },
                                 ),
                           ),
                         );
+
+                        // ✅ Reconnect socket if result is true
+                        if (result == true) {
+                          _initSocket();
+                        }
                       },
                     ),
                   );
