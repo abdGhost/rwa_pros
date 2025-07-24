@@ -237,6 +237,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   }
 
   Future<void> fetchThreads() async {
+    print(widget.forumData);
     setState(() {
       isLoading = true;
     });
@@ -253,6 +254,10 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
           'https://rwa-f1623a22e3ed.herokuapp.com/api/forum?categoryId=${widget.forumData['id']}',
         ),
         headers: headers,
+      );
+
+      print(
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/forum?categoryId=${widget.forumData['id']}',
       );
 
       if (response.statusCode == 200) {

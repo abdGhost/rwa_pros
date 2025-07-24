@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:rwa_app/screens/form_thread_screen.dart';
 import 'package:rwa_app/screens/forum/category_modal.dart';
 import 'package:rwa_app/screens/forum/hot_topic_modal.dart';
+import 'package:rwa_app/screens/forum/recent_thread.dart';
 import 'package:rwa_app/screens/forum/subcategory_tile.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:rwa_app/screens/profile_screen.dart';
@@ -20,6 +21,7 @@ class ForumCategory extends StatefulWidget {
 class _ForumCategoryState extends State<ForumCategory> {
   List<Category> categories = [];
   List<HotTopic> hotTopics = [];
+  List<RecentThread> recentThreads = [];
 
   bool isLoading = true;
 
@@ -29,6 +31,7 @@ class _ForumCategoryState extends State<ForumCategory> {
     timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
     fetchCategories();
     fetchHotTopics();
+    fetchRecentThreads();
   }
 
   Future<void> fetchCategories() async {
@@ -69,6 +72,20 @@ class _ForumCategoryState extends State<ForumCategory> {
     }
   }
 
+  Future<void> fetchRecentThreads() async {
+    final url = Uri.parse('https://rwa-f1623a22e3ed.herokuapp.com/api/forum');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final List list = data['forums'];
+      setState(() {
+        recentThreads =
+            list.map((json) => RecentThread.fromJson(json)).toList();
+      });
+    }
+  }
+
   Widget buildHottestTodayCard() {
     return Container(
       color: Colors.white,
@@ -97,49 +114,73 @@ class _ForumCategoryState extends State<ForumCategory> {
               ),
               const SizedBox(height: 10),
               ...hotTopics
-                  .take(10)
+                  .take(3)
                   .map(
-                    (topic) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const CircleAvatar(
-                            radius: 12,
-                            backgroundColor: Colors.green,
-                            child: Icon(
-                              Icons.whatshot,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  topic.title,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                    (topic) => GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => ForumThreadScreen(
+                                  forumData: {
+                                    'id': topic.id,
+                                    'name': topic.title,
+                                    'description': topic.text ?? '',
+                                    'categoryId': topic.categoryId ?? '',
+                                  },
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  "${topic.commentsCount} replies"
-                                  "${topic.userName != null ? ' · ${topic.userName}' : ''}",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                        ],
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: const Color(0xFFEBB411),
+                              child: Text(
+                                topic.userName != null &&
+                                        topic.userName!.isNotEmpty
+                                    ? topic.userName![0].toUpperCase()
+                                    : '?',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    topic.title,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "${topic.commentsCount} replies"
+                                    "${topic.userName != null ? ' · ${topic.userName}' : ''}",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -182,86 +223,86 @@ class _ForumCategoryState extends State<ForumCategory> {
                 ],
               ),
               const SizedBox(height: 10),
-
-              // Thread 1
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.green,
-                    child: Icon(
-                      Icons.arrow_drop_up,
-                      color: Colors.white,
-                      size: 16,
+              ...recentThreads
+                  .take(10)
+                  .map(
+                    (thread) => GestureDetector(
+                      onTap: () {
+                        print('Tapped RecentThread:');
+                        print('ID: ${thread.id}');
+                        print('Title: ${thread.title}');
+                        print('User: ${thread.userName}');
+                        print('Comments: ${thread.commentsCount}');
+                        print('Category ID: ${thread.categoryId}');
+                        print('Category Name: ${thread.categoryName}');
+                        print('Text: ${thread.text}');
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => ForumThreadScreen(
+                                  forumData: {
+                                    'id': thread.categoryId,
+                                    'name': thread.title,
+                                    'description': thread.text,
+                                    'categoryId': thread.id,
+                                  },
+                                ),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: Colors.green,
+                              child: Text(
+                                thread.userName != null &&
+                                        thread.userName!.isNotEmpty
+                                    ? thread.userName![0].toUpperCase()
+                                    : '?',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    thread.title,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "${thread.commentsCount} replies"
+                                    "${thread.userName != null ? ' · ${thread.userName}' : ''}",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Sim.ai Sold For \$220,000",
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          "8 replies · silentg",
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // Thread 2
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CircleAvatar(
-                    radius: 12,
-                    backgroundImage: NetworkImage(
-                      "https://i.pravatar.cc/150?img=65",
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "I missed first 1000000USD in my domain career!",
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          "11 replies · domainnews",
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -380,31 +421,7 @@ class _ForumCategoryState extends State<ForumCategory> {
                                         ) {
                                           final subIndex = subEntry.key;
                                           final sub = subEntry.value;
-                                          // return SubCategoryTile(
-                                          //   imageUrl: sub.imageUrl,
-                                          //   title: sub.name,
-                                          //   contentTitle: sub.description,
-                                          //   createdAt: sub.createdAt,
-                                          //   author: "Admin",
-                                          //   isLast:
-                                          //       subIndex ==
-                                          //       category.subCategories.length -
-                                          //           1,
-                                          //   onTap: () {
-                                          //     print("Subcategory tapped:");
-                                          //     print("ID: ${sub.id}");
-                                          //     print("Name: ${sub.name}");
-                                          //     print(
-                                          //       "Description: ${sub.description}",
-                                          //     );
-                                          //     print(
-                                          //       "Image URL: ${sub.imageUrl}",
-                                          //     );
-                                          //     print(
-                                          //       "Created At: ${sub.createdAt}",
-                                          //     );
-                                          //   },
-                                          // );
+
                                           return SubCategoryTile(
                                             imageUrl: sub.imageUrl,
                                             title: sub.name,
@@ -416,9 +433,6 @@ class _ForumCategoryState extends State<ForumCategory> {
                                                 category.subCategories.length -
                                                     1,
                                             onTap: () {
-                                              print(
-                                                "Navigating to ForumThreadScreen...",
-                                              );
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
