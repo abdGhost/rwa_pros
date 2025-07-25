@@ -105,6 +105,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         commentsCount += 1;
       });
     });
+
     socket.on('reactToForum', (data) async {
       if (!mounted) return;
 
@@ -114,59 +115,45 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       final reactorUserId = data['userId'];
       final action = data['action'];
 
-      // Skip if it's a different thread
       if (updatedThreadId != widget.thread['_id']) {
         print('⚠️ Reaction is for a different thread, ignoring');
         return;
       }
 
-      // 🛑 Skip if this is your own reaction
-      if (reactorUserId == currentUserId) {
-        print('👤 Reaction is from my user, skipping duplicate UI update.');
-        return;
-      }
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserId = prefs.getString('userId') ?? '';
+      final isMyAction = reactorUserId == currentUserId;
 
       setState(() {
         if (action == 'Added') {
-          if (!isLiked) {
+          if (!isMyAction) likeCount += 1;
+          if (dislikeCount > 0) dislikeCount -= 1;
+          if (isMyAction) {
             isLiked = true;
-            likeCount += 1;
-          }
-
-          if (isDisliked && dislikeCount > 0) {
             isDisliked = false;
-            dislikeCount -= 1;
-            print('✅ Removed dislike due to like switch from other user');
           }
         } else if (action == 'Remove') {
-          if (isLiked && likeCount > 0) {
+          if (!isMyAction)
+            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
+          if (isMyAction) {
             isLiked = false;
-            likeCount -= 1;
           }
         } else if (action == 'Updated') {
-          if (!isLiked) {
+          if (!isMyAction) likeCount += 1;
+          if (dislikeCount > 0) dislikeCount -= 1;
+          if (isMyAction) {
             isLiked = true;
-            likeCount += 1;
-          }
-
-          if (isDisliked && dislikeCount > 0) {
             isDisliked = false;
-            dislikeCount -= 1;
-            print(
-              '✅ Removed dislike due to like switch from other user (Updated)',
-            );
           }
-
-          print('✅ Reaction updated from dislike to like');
         } else {
           print('⚠️ Unknown action: $action');
         }
 
-        print('✅ Updated likes count to $likeCount for another user');
+        print('✅ Updated like/dislike counts: 👍 $likeCount 👎 $dislikeCount');
       });
     });
 
-    socket.on('reactToForumDislike', (data) {
+    socket.on('reactToForumDislike', (data) async {
       if (!mounted) return;
 
       print('🔔 reactToForumDislike received: $data');
@@ -177,47 +164,37 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       if (updatedThreadId != widget.thread['_id']) return;
 
-      // ✅ Add this check (was missing)
-      if (reactorUserId == currentUserId) {
-        print('👤 Dislike is from my user, skipping duplicate UI update.');
-        return;
-      }
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserId = prefs.getString('userId') ?? '';
+      final isMyAction = reactorUserId == currentUserId;
 
       setState(() {
         if (action == 'Added') {
-          if (!isDisliked) {
+          if (!isMyAction) dislikeCount += 1;
+          if (likeCount > 0) likeCount -= 1;
+          if (isMyAction) {
             isDisliked = true;
-            dislikeCount += 1;
-          }
-
-          if (isLiked && likeCount > 0) {
             isLiked = false;
-            likeCount -= 1;
-            print('✅ Removed like due to dislike switch from other user');
           }
         } else if (action == 'Remove') {
-          if (isDisliked && dislikeCount > 0) {
+          if (!isMyAction)
+            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
+          if (isMyAction) {
             isDisliked = false;
-            dislikeCount -= 1;
           }
         } else if (action == 'Updated') {
-          if (!isDisliked) {
+          if (!isMyAction) dislikeCount += 1;
+          if (likeCount > 0) likeCount -= 1;
+          if (isMyAction) {
             isDisliked = true;
-            dislikeCount += 1;
-          }
-
-          if (isLiked && likeCount > 0) {
             isLiked = false;
-            likeCount -= 1;
-            print(
-              '✅ Removed like due to dislike switch from other user (Updated)',
-            );
           }
-
-          print('✅ Reaction updated from like to dislike');
-        } else {
-          print('⚠️ Unknown action: $action');
         }
+
+        print('✅ Updated like/dislike counts: 👍 $likeCount 👎 $dislikeCount');
+        print(
+          '🔢 UI Rebuilding with isLiked = $isLiked and isDisliked = $isDisliked',
+        );
       });
     });
 
@@ -232,17 +209,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       final prefs = await SharedPreferences.getInstance();
       final currentUserId = prefs.getString('userId') ?? '';
+      final isMyAction = reactorUserId == currentUserId;
 
       final index = replies.indexWhere((c) => c['id'] == commentId);
       if (index != -1) {
         setState(() {
           if (action == 'Added') {
             replies[index]['likes'] += 1;
-
-            if (reactorUserId == currentUserId) {
+            if (isMyAction) {
               replies[index]['isLiked'] = true;
 
-              // ✅ Remove dislike if previously disliked
               if (replies[index]['isDisliked']) {
                 replies[index]['isDisliked'] = false;
                 replies[index]['dislikes'] =
@@ -254,20 +230,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           } else if (action == 'Remove') {
             replies[index]['likes'] =
                 (replies[index]['likes'] - 1).clamp(0, double.infinity).toInt();
-
-            if (reactorUserId == currentUserId) {
+            if (isMyAction) {
               replies[index]['isLiked'] = false;
             }
           } else if (action == 'Updated') {
             replies[index]['likes'] += 1;
-
-            // ✅ Always reduce dislike count since user switched from dislike to like
             replies[index]['dislikes'] =
                 (replies[index]['dislikes'] - 1)
                     .clamp(0, double.infinity)
                     .toInt();
-
-            if (reactorUserId == currentUserId) {
+            if (isMyAction) {
               replies[index]['isLiked'] = true;
               replies[index]['isDisliked'] = false;
             }
@@ -287,17 +259,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       final prefs = await SharedPreferences.getInstance();
       final currentUserId = prefs.getString('userId') ?? '';
+      final isMyAction = reactorUserId == currentUserId;
 
       final index = replies.indexWhere((c) => c['id'] == commentId);
       if (index != -1) {
         setState(() {
           if (action == 'Added') {
             replies[index]['dislikes'] += 1;
-
-            if (reactorUserId == currentUserId) {
+            if (isMyAction) {
               replies[index]['isDisliked'] = true;
 
-              // ✅ Remove like if previously liked
               if (replies[index]['isLiked']) {
                 replies[index]['isLiked'] = false;
                 replies[index]['likes'] =
@@ -311,18 +282,14 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 (replies[index]['dislikes'] - 1)
                     .clamp(0, double.infinity)
                     .toInt();
-
-            if (reactorUserId == currentUserId) {
+            if (isMyAction) {
               replies[index]['isDisliked'] = false;
             }
           } else if (action == 'Updated') {
             replies[index]['dislikes'] += 1;
-
-            // ✅ Always reduce like count since user switched from like to dislike
             replies[index]['likes'] =
                 (replies[index]['likes'] - 1).clamp(0, double.infinity).toInt();
-
-            if (reactorUserId == currentUserId) {
+            if (isMyAction) {
               replies[index]['isDisliked'] = true;
               replies[index]['isLiked'] = false;
             }
@@ -553,6 +520,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final title = widget.thread['title'] ?? 'Thread';
+    print(
+      '🔢 UI Rebuilding with likeCount = $likeCount and isLiked = $isLiked',
+    );
 
     return WillPopScope(
       onWillPop: () async {
@@ -1320,18 +1290,15 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         setState(() {
           if (!isLiked) {
             isLiked = true;
-            likeCount += 1;
           }
           if (isDisliked) {
             isDisliked = false;
-            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else if (response.statusCode == 200) {
         setState(() {
           if (isLiked) {
             isLiked = false;
-            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else {
@@ -1370,18 +1337,15 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         setState(() {
           if (!isDisliked) {
             isDisliked = true;
-            dislikeCount += 1;
           }
           if (isLiked) {
             isLiked = false;
-            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else if (response.statusCode == 200) {
         setState(() {
           if (isDisliked) {
             isDisliked = false;
-            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else {
