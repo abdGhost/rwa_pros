@@ -562,16 +562,19 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     Expanded(
                       child: ListView(
                         controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
+                        // padding: const EdgeInsets.all(12),
                         children: [
                           _buildMainPost(theme),
                           const SizedBox(height: 16),
-                          Text(
-                            "Discussions",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onBackground,
+                          Padding(
+                            padding: const EdgeInsets.only(left: 20),
+                            child: Text(
+                              "Discussions",
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onBackground,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -609,7 +612,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                                         selectedCommentId == reply['id']
                                             ? Color(0xFFEBB411)
                                             : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(4),
+                                    // borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: _buildReplyCard(reply, theme, index),
                                 ),
@@ -624,8 +627,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                           context,
                         ).colorScheme.surfaceVariant.withOpacity(0.8),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                          horizontal: 10,
+                          vertical: 0,
                         ),
                         child: Row(
                           children: [
@@ -663,122 +666,151 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   }
 
   Widget _buildMainPost(ThemeData theme) {
-    return Card(
-      elevation: 0.02,
-      color: theme.cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.thread['title'] ?? '',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-                color: theme.textTheme.titleMedium?.color,
-              ),
-            ),
-            const SizedBox(height: 6),
-            HtmlPreviewWithToggle(
-              html: description,
-              isExpanded: _isDescriptionExpanded,
-              onToggle: () {
-                setState(() {
-                  _isDescriptionExpanded = !_isDescriptionExpanded;
-                });
-              },
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "- $author",
-              style: GoogleFonts.inter(
-                fontStyle: FontStyle.italic,
-                fontSize: 12,
-                color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                // LIKE BUTTON
-                InkWell(
-                  onTap: () async {
-                    if (isMainReactionProcessing) return;
-                    if (await _ensureLoggedIn()) _toggleMainPostLike();
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.thumb_up_outlined,
-                        size: 18,
-                        color: isLiked ? Color(0xFFEBB411) : Colors.grey[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$likeCount',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: isLiked ? Color(0xFFEBB411) : Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                // DISLIKE BUTTON
-                InkWell(
-                  onTap: () async {
-                    if (isMainReactionProcessing) return;
-                    if (await _ensureLoggedIn()) _toggleMainPostDislike();
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.thumb_down_outlined,
-                        size: 18,
-                        color: isDisliked ? Colors.red : Colors.grey[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$dislikeCount',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: isDisliked ? Colors.red : Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                // COMMENTS
-                Icon(
-                  Icons.mode_comment_outlined,
-                  size: 18,
-                  color: Colors.grey[700],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$commentsCount',
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.zero,
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Color(0xFFEBB411), width: .2),
+          bottom: BorderSide(color: Color(0xFFEBB411), width: .2),
+        ),
+      ),
+      child: Card(
+        elevation: 0.02,
+        color: theme.cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero, // optional: remove corner radius
+        ),
+        margin: EdgeInsets.zero,
+        // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  widget.thread['title'] ?? '',
                   style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: theme.textTheme.titleMedium?.color,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              HtmlPreviewWithToggle(
+                html: description,
+                isExpanded: _isDescriptionExpanded,
+                onToggle: () {
+                  setState(() {
+                    _isDescriptionExpanded = !_isDescriptionExpanded;
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+
+                child: Text(
+                  "- $author",
+                  style: GoogleFonts.inter(
+                    fontStyle: FontStyle.italic,
                     fontSize: 12,
-                    color: Colors.grey[700],
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  timeAgo(lastUpdated),
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: Colors.grey[500],
-                  ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+
+                child: Row(
+                  children: [
+                    // LIKE BUTTON
+                    InkWell(
+                      onTap: () async {
+                        if (isMainReactionProcessing) return;
+                        if (await _ensureLoggedIn()) _toggleMainPostLike();
+                      },
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.thumb_up_outlined,
+                            size: 18,
+                            color:
+                                isLiked ? Color(0xFFEBB411) : Colors.grey[700],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$likeCount',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color:
+                                  isLiked
+                                      ? Color(0xFFEBB411)
+                                      : Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // DISLIKE BUTTON
+                    InkWell(
+                      onTap: () async {
+                        if (isMainReactionProcessing) return;
+                        if (await _ensureLoggedIn()) _toggleMainPostDislike();
+                      },
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.thumb_down_outlined,
+                            size: 18,
+                            color: isDisliked ? Colors.red : Colors.grey[700],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$dislikeCount',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: isDisliked ? Colors.red : Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // COMMENTS
+                    Icon(
+                      Icons.mode_comment_outlined,
+                      size: 18,
+                      color: Colors.grey[700],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$commentsCount',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      timeAgo(lastUpdated),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -806,10 +838,15 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           elevation: 0.02,
           key: replyKeys[reply['id']],
           color: theme.cardColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
           margin: const EdgeInsets.symmetric(vertical: 4),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.only(
+              left: 20,
+              right: 12,
+              bottom: 12,
+              top: 12,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
