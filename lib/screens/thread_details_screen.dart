@@ -58,7 +58,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     SharedPreferences.getInstance().then((prefs) {
       setState(() {
-        currentUserId = prefs.getString('id') ?? '';
+        currentUserId = prefs.getString('userId') ?? ''; // ✅ Correct key
       });
     });
 
@@ -105,8 +105,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         commentsCount += 1;
       });
     });
-
-    socket.on('reactToForumForForumPage', (data) async {
+    socket.on('reactToForum', (data) async {
       if (!mounted) return;
 
       print('🔔 reactToForum received: $data');
@@ -115,11 +114,13 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       final reactorUserId = data['userId'];
       final action = data['action'];
 
+      // Skip if it's a different thread
       if (updatedThreadId != widget.thread['_id']) {
         print('⚠️ Reaction is for a different thread, ignoring');
         return;
       }
 
+      // 🛑 Skip if this is your own reaction
       if (reactorUserId == currentUserId) {
         print('👤 Reaction is from my user, skipping duplicate UI update.');
         return;
@@ -127,18 +128,29 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       setState(() {
         if (action == 'Added') {
-          likeCount += 1;
+          if (!isLiked) {
+            isLiked = true;
+            likeCount += 1;
+          }
 
-          if (dislikeCount > 0) {
+          if (isDisliked && dislikeCount > 0) {
+            isDisliked = false;
             dislikeCount -= 1;
             print('✅ Removed dislike due to like switch from other user');
           }
         } else if (action == 'Remove') {
-          likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
+          if (isLiked && likeCount > 0) {
+            isLiked = false;
+            likeCount -= 1;
+          }
         } else if (action == 'Updated') {
-          likeCount += 1;
+          if (!isLiked) {
+            isLiked = true;
+            likeCount += 1;
+          }
 
-          if (dislikeCount > 0) {
+          if (isDisliked && dislikeCount > 0) {
+            isDisliked = false;
             dislikeCount -= 1;
             print(
               '✅ Removed dislike due to like switch from other user (Updated)',
@@ -149,6 +161,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         } else {
           print('⚠️ Unknown action: $action');
         }
+
         print('✅ Updated likes count to $likeCount for another user');
       });
     });
@@ -164,33 +177,37 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       if (updatedThreadId != widget.thread['_id']) return;
 
+      // ✅ Add this check (was missing)
+      if (reactorUserId == currentUserId) {
+        print('👤 Dislike is from my user, skipping duplicate UI update.');
+        return;
+      }
+
       setState(() {
         if (action == 'Added') {
-          dislikeCount += 1;
+          if (!isDisliked) {
+            isDisliked = true;
+            dislikeCount += 1;
+          }
 
-          if (likeCount > 0) {
+          if (isLiked && likeCount > 0) {
+            isLiked = false;
             likeCount -= 1;
             print('✅ Removed like due to dislike switch from other user');
           }
-
-          if (reactorUserId == currentUserId) {
-            isDisliked = true;
-
-            if (isLiked) {
-              isLiked = false;
-              likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
-            }
-          }
         } else if (action == 'Remove') {
-          dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
-
-          if (reactorUserId == currentUserId) {
+          if (isDisliked && dislikeCount > 0) {
             isDisliked = false;
+            dislikeCount -= 1;
           }
         } else if (action == 'Updated') {
-          dislikeCount += 1;
+          if (!isDisliked) {
+            isDisliked = true;
+            dislikeCount += 1;
+          }
 
-          if (likeCount > 0) {
+          if (isLiked && likeCount > 0) {
+            isLiked = false;
             likeCount -= 1;
             print(
               '✅ Removed like due to dislike switch from other user (Updated)',
@@ -1141,20 +1158,19 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     print(payload);
 
-    // Optimistic UI update with mutual exclusivity
+    // Optimistic UI update
     setState(() {
-      if (replies[index]['isLiked']) {
+      if (replies[index]['isLiked'] == true) {
         replies[index]['isLiked'] = false;
-        replies[index]['likes'] -= 1;
+        replies[index]['likes'] = (replies[index]['likes'] ?? 1) - 1;
       } else {
         replies[index]['isLiked'] = true;
-        replies[index]['likes'] += 1;
+        replies[index]['likes'] = (replies[index]['likes'] ?? 0) + 1;
 
-        // ✅ If previously disliked, remove dislike
-        if (replies[index]['isDisliked']) {
+        if (replies[index]['isDisliked'] == true) {
           replies[index]['isDisliked'] = false;
           replies[index]['dislikes'] =
-              (replies[index]['dislikes'] - 1)
+              ((replies[index]['dislikes'] ?? 1) - 1)
                   .clamp(0, double.infinity)
                   .toInt();
         }
@@ -1176,35 +1192,30 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       } else if (response.statusCode == 200) {
         print("✅ Reaction removed");
       } else {
-        print("❌ Failed to react to comment: ${response.body}");
-        // Revert optimistic UI on failure
-        setState(() {
-          if (replies[index]['isLiked']) {
-            replies[index]['isLiked'] = false;
-            replies[index]['likes'] -= 1;
-          } else {
-            replies[index]['isLiked'] = true;
-            replies[index]['likes'] += 1;
-          }
-        });
+        print("❌ Failed to react: ${response.body}");
+        _revertLikeState(index);
       }
     } catch (e) {
-      print("❌ Error reacting to comment: $e");
-      // Revert optimistic UI on error
-      setState(() {
-        if (replies[index]['isLiked']) {
-          replies[index]['isLiked'] = false;
-          replies[index]['likes'] -= 1;
-        } else {
-          replies[index]['isLiked'] = true;
-          replies[index]['likes'] += 1;
-        }
-      });
+      print("❌ Error reacting: $e");
+      _revertLikeState(index);
     }
+  }
+
+  void _revertLikeState(int index) {
+    setState(() {
+      if (replies[index]['isLiked'] == true) {
+        replies[index]['isLiked'] = false;
+        replies[index]['likes'] = (replies[index]['likes'] ?? 1) - 1;
+      } else {
+        replies[index]['isLiked'] = true;
+        replies[index]['likes'] = (replies[index]['likes'] ?? 0) + 1;
+      }
+    });
   }
 
   Future<void> _toggleReplyDislike(int index) async {
     if (!canTap('replyDislike_$index')) return;
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
     final commentId = replies[index]['id'];
@@ -1225,21 +1236,24 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     print(payload);
 
-    // Optimistic UI update with mutual exclusivity
+    // Optimistic UI update
     setState(() {
-      if (replies[index]['isDisliked']) {
+      if (replies[index]['isDisliked'] == true) {
         replies[index]['isDisliked'] = false;
         replies[index]['dislikes'] =
-            (replies[index]['dislikes'] - 1).clamp(0, double.infinity).toInt();
+            ((replies[index]['dislikes'] ?? 1) - 1)
+                .clamp(0, double.infinity)
+                .toInt();
       } else {
         replies[index]['isDisliked'] = true;
-        replies[index]['dislikes'] += 1;
+        replies[index]['dislikes'] = (replies[index]['dislikes'] ?? 0) + 1;
 
-        // ✅ If previously liked, remove like
-        if (replies[index]['isLiked']) {
+        if (replies[index]['isLiked'] == true) {
           replies[index]['isLiked'] = false;
           replies[index]['likes'] =
-              (replies[index]['likes'] - 1).clamp(0, double.infinity).toInt();
+              ((replies[index]['likes'] ?? 1) - 1)
+                  .clamp(0, double.infinity)
+                  .toInt();
         }
       }
     });
@@ -1257,37 +1271,28 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       if (response.statusCode == 201 || response.statusCode == 200) {
         print("✅ Comment dislike toggled");
       } else {
-        print("❌ Failed to dislike comment: ${response.body}");
-        // Revert optimistic UI on failure
-        setState(() {
-          if (replies[index]['isDisliked']) {
-            replies[index]['isDisliked'] = false;
-            replies[index]['dislikes'] =
-                (replies[index]['dislikes'] - 1)
-                    .clamp(0, double.infinity)
-                    .toInt();
-          } else {
-            replies[index]['isDisliked'] = true;
-            replies[index]['dislikes'] += 1;
-          }
-        });
+        print("❌ Failed to dislike: ${response.body}");
+        _revertDislikeState(index);
       }
     } catch (e) {
-      print("❌ Error disliking comment: $e");
-      // Revert optimistic UI on error
-      setState(() {
-        if (replies[index]['isDisliked']) {
-          replies[index]['isDisliked'] = false;
-          replies[index]['dislikes'] =
-              (replies[index]['dislikes'] - 1)
-                  .clamp(0, double.infinity)
-                  .toInt();
-        } else {
-          replies[index]['isDisliked'] = true;
-          replies[index]['dislikes'] += 1;
-        }
-      });
+      print("❌ Error disliking: $e");
+      _revertDislikeState(index);
     }
+  }
+
+  void _revertDislikeState(int index) {
+    setState(() {
+      if (replies[index]['isDisliked'] == true) {
+        replies[index]['isDisliked'] = false;
+        replies[index]['dislikes'] =
+            ((replies[index]['dislikes'] ?? 1) - 1)
+                .clamp(0, double.infinity)
+                .toInt();
+      } else {
+        replies[index]['isDisliked'] = true;
+        replies[index]['dislikes'] = (replies[index]['dislikes'] ?? 0) + 1;
+      }
+    });
   }
 
   Future<void> _toggleMainPostLike() async {

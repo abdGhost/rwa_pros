@@ -116,7 +116,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       });
     });
 
-    socket.on('reactToForumForForumPage', (data) {
+    socket.on('reactToForum', (data) {
       final updatedThreadId = data['forumId'];
       final reactorUserId = data['userId'];
       final action = data['action'];

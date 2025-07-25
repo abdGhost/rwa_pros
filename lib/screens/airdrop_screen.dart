@@ -33,53 +33,73 @@ class _AirdropScreenState extends State<AirdropScreen> {
 
   Future<void> fetchAirdrops() async {
     final url = Uri.parse(
-      'https://rwa-f1623a22e3ed.herokuapp.com/api/admin/airdrop/get/allAirdrop',
+      'https://rwa-f1623a22e3ed.herokuapp.com/api/airdrops',
     );
     try {
       final response = await http.get(url);
       final data = json.decode(response.body);
-      final List fetched = data["data"];
+      final List fetched = data["airdrops"];
       print('airdrop Data $fetched');
 
       setState(() {
         airdrops =
-            fetched.map<Map<String, String>>((item) {
-              // Parse custom date format
-              final dateFormat = DateFormat('dd/MM/yyyy');
-              DateTime start = dateFormat.parse(item['airdropStart']);
-              DateTime end = dateFormat.parse(item['airdropEnd']);
-              final now = DateTime.now();
+            fetched
+                .map<Map<String, String>>((item) {
+                  try {
+                    // Extract actual date part: e.g. from "16T12:09/07/2025" take "07/07/2025"
+                    final startRaw = item['airdropStart'] as String;
+                    final endRaw = item['airdropEnd'] as String;
 
-              bool isLive = now.isAfter(start) && now.isBefore(end);
-              bool isEnded = now.isAfter(end);
+                    // Split at '/' and take last 3 parts
+                    final startParts = startRaw.split('/');
+                    final endParts = endRaw.split('/');
 
-              String category =
-                  isLive
-                      ? "Live"
-                      : isEnded
-                      ? "Ended"
-                      : "Upcoming";
+                    final startString =
+                        startParts.length >= 3
+                            ? "${startParts[0].substring(0, 2)}/${startParts[1]}/${startParts[2]}"
+                            : "01/01/1970";
 
-              return {
-                '_id': item['_id'],
-                'project': item['tokenName'].trim(),
-                'token': item['tokenTicker'],
-                'chain': item['chain'],
-                'reward': item['airdropAmt'],
-                'image': item['image'],
-                'description': item['tokenDescription'],
-                'date':
-                    "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
-                'eligibility': item['airdropEligibility'],
-                'status':
-                    isLive
-                        ? "Live"
-                        : isEnded
-                        ? "Ended"
-                        : "Upcoming",
-                'category': category,
-              };
-            }).toList();
+                    final endString =
+                        endParts.length >= 3
+                            ? "${endParts[0].substring(0, 2)}/${endParts[1]}/${endParts[2]}"
+                            : "01/01/1970";
+
+                    final dateFormat = DateFormat('dd/MM/yyyy');
+                    DateTime start = dateFormat.parse(startString);
+                    DateTime end = dateFormat.parse(endString);
+                    final now = DateTime.now();
+
+                    bool isLive = now.isAfter(start) && now.isBefore(end);
+                    bool isEnded = now.isAfter(end);
+
+                    String category =
+                        isLive
+                            ? "Live"
+                            : isEnded
+                            ? "Ended"
+                            : "Upcoming";
+
+                    return {
+                      '_id': item['_id'],
+                      'project': item['tokenName'].trim(),
+                      'token': item['tokenTicker'],
+                      'chain': item['chain'],
+                      'reward': item['airdropAmt'],
+                      'image': item['image'],
+                      'description': item['tokenDescription'],
+                      'date':
+                          "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
+                      'eligibility': item['airdropEligibility'],
+                      'status': category,
+                      'category': category,
+                    };
+                  } catch (e) {
+                    print('❌ Error parsing airdrop date: $e');
+                    return {};
+                  }
+                })
+                .where((item) => item.isNotEmpty)
+                .toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -89,6 +109,65 @@ class _AirdropScreenState extends State<AirdropScreen> {
       });
     }
   }
+
+  // Future<void> fetchAirdrops() async {
+  //   final url = Uri.parse(
+  //     'https://rwa-f1623a22e3ed.herokuapp.com/api/admin/airdrop/get/allAirdrop',
+  //   );
+  //   try {
+  //     final response = await http.get(url);
+  //     final data = json.decode(response.body);
+  //     final List fetched = data["data"];
+  //     print('airdrop Data $fetched');
+
+  //     setState(() {
+  //       airdrops =
+  //           fetched.map<Map<String, String>>((item) {
+  //             // Parse custom date format
+  //             final dateFormat = DateFormat('dd/MM/yyyy');
+  //             DateTime start = dateFormat.parse(item['airdropStart']);
+  //             DateTime end = dateFormat.parse(item['airdropEnd']);
+  //             final now = DateTime.now();
+
+  //             bool isLive = now.isAfter(start) && now.isBefore(end);
+  //             bool isEnded = now.isAfter(end);
+
+  //             String category =
+  //                 isLive
+  //                     ? "Live"
+  //                     : isEnded
+  //                     ? "Ended"
+  //                     : "Upcoming";
+
+  //             return {
+  //               '_id': item['_id'],
+  //               'project': item['tokenName'].trim(),
+  //               'token': item['tokenTicker'],
+  //               'chain': item['chain'],
+  //               'reward': item['airdropAmt'],
+  //               'image': item['image'],
+  //               'description': item['tokenDescription'],
+  //               'date':
+  //                   "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
+  //               'eligibility': item['airdropEligibility'],
+  //               'status':
+  //                   isLive
+  //                       ? "Live"
+  //                       : isEnded
+  //                       ? "Ended"
+  //                       : "Upcoming",
+  //               'category': category,
+  //             };
+  //           }).toList();
+  //       _isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     debugPrint('❌ Error fetching airdrops: $e');
+  //     setState(() {
+  //       _isLoading = false;
+  //     });
+  //   }
+  // }
 
   List<Map<String, String>> get filteredAirdrops {
     if (_selectedTab == "Recently Added") return airdrops;
