@@ -610,12 +610,36 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                                   decoration: BoxDecoration(
                                     color:
                                         selectedCommentId == reply['id']
-                                            ? Color(0xFFEBB411)
+                                            ? const Color(
+                                              0xFFEBB411,
+                                            ).withOpacity(
+                                              0.1,
+                                            ) // Optional background highlight
                                             : Colors.transparent,
-                                    // borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color:
+                                          selectedCommentId == reply['id']
+                                              ? const Color(0xFFEBB411)
+                                              : Colors.transparent,
+                                      width:
+                                          selectedCommentId == reply['id']
+                                              ? .4
+                                              : 0.0, // Change width here
+                                    ),
                                   ),
                                   child: _buildReplyCard(reply, theme, index),
                                 ),
+
+                                // child: Container(
+                                //   decoration: BoxDecoration(
+                                //     color:
+                                //         selectedCommentId == reply['id']
+                                //             ? Color(0xFFEBB411)
+                                //             : Colors.transparent,
+                                //     // borderRadius: BorderRadius.circular(4),
+                                //   ),
+                                //   child: _buildReplyCard(reply, theme, index),
+                                // ),
                               );
                             }).toList(),
                         ],
@@ -671,8 +695,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       margin: EdgeInsets.zero,
       decoration: const BoxDecoration(
         border: Border(
-          top: BorderSide(color: Color(0xFFEBB411), width: .2),
-          bottom: BorderSide(color: Color(0xFFEBB411), width: .2),
+          top: BorderSide(color: Color(0xFFEBB411), width: .4),
+          bottom: BorderSide(color: Color(0xFFEBB411), width: .4),
         ),
       ),
       child: Card(
