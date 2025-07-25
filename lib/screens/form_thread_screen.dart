@@ -121,52 +121,38 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       final reactorUserId = data['userId'];
       final action = data['action'];
 
-      print('🔔 reactToForum received: $data');
+      print('🔔 reactToForum received:');
+      print('📌 forumId: $updatedThreadId');
+      print('👤 reactorUserId: $reactorUserId');
+      print('➡️  action: $action');
+      print('🧍 myUserId: $userId');
 
       final index = threads.indexWhere((t) => t['_id'] == updatedThreadId);
-
-      if (index != -1) {
-        if (reactorUserId == userId) {
-          print('👤 Reaction is from my user, skipping duplicate UI update.');
-          return;
-        }
-
-        setState(() {
-          int currentLikes = threads[index]['likes'] ?? 0;
-          int updatedLikes = currentLikes;
-
-          if (action == 'Added') {
-            updatedLikes = currentLikes + 1;
-
-            int currentDislikes = threads[index]['dislikes'] ?? 0;
-            if (currentDislikes > 0) {
-              threads[index]['dislikes'] = currentDislikes - 1;
-              print(
-                '✅ Decremented dislikes count due to new like from another user',
-              );
-            }
-          } else if (action == 'Remove') {
-            updatedLikes = (currentLikes - 1).clamp(0, double.infinity).toInt();
-          } else if (action == 'Updated') {
-            updatedLikes = currentLikes + 1;
-
-            int currentDislikes = threads[index]['dislikes'] ?? 0;
-            if (currentDislikes > 0) {
-              threads[index]['dislikes'] = currentDislikes - 1;
-              print('✅ Decremented dislikes count due to Updated like switch');
-            }
-
-            print('✅ Reaction updated from dislike to like');
-          } else {
-            print('⚠️ Unknown action: $action');
-          }
-
-          threads[index]['likes'] = updatedLikes;
-          print('✅ Updated likes count to $updatedLikes for another user');
-        });
-      } else {
-        print('⚠️ Thread not found for id $updatedThreadId');
+      if (index == -1) {
+        print('❌ Thread not found');
+        return;
       }
+
+      if (reactorUserId == userId) {
+        print('⚠️ Skipping update — event was triggered by this user.');
+        return;
+      }
+
+      setState(() {
+        int currentLikes = threads[index]['likes'] ?? 0;
+        int currentDislikes = threads[index]['dislikes'] ?? 0;
+
+        if (action == 'Added') {
+          threads[index]['likes'] = currentLikes + 1;
+          print('👍 Like added by another user');
+        } else if (action == 'Remove') {
+          threads[index]['likes'] = (currentLikes - 1).clamp(0, currentLikes);
+          print('🧹 Like removed by other user');
+        } else if (action == 'Updated') {
+          threads[index]['likes'] = currentLikes + 1;
+          print('✅ Updated likes to ${currentLikes + 1} (from other user)');
+        }
+      });
     });
 
     socket.on('reactToForumDislike', (data) {
@@ -192,18 +178,22 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
           if (action == 'Added') {
             updatedDislikes = currentDislikes + 1;
+            dislikedList[index] = true; // ✅ mark disliked
           } else if (action == 'Remove') {
             updatedDislikes =
                 (currentDislikes - 1).clamp(0, double.infinity).toInt();
+            dislikedList[index] = false; // ✅ mark undisliked
           } else if (action == 'Updated') {
             updatedDislikes = currentDislikes + 1;
 
             int currentLikes = threads[index]['likes'] ?? 0;
             if (currentLikes > 0) {
               threads[index]['likes'] = currentLikes - 1;
+              likedList[index] = false; // ✅ clear like
               print('✅ Decremented likes count due to Updated dislike switch');
             }
 
+            dislikedList[index] = true; // ✅ mark disliked
             print('✅ Reaction updated from like to dislike');
           } else {
             print('⚠️ Unknown dislike action: $action');
@@ -322,18 +312,20 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   }
 
   Future<void> reactToThread(String forumId, int index) async {
+    print('🟡 reactToThread called for forumId: $forumId at index $index');
+
     if (!canTap(index)) {
       print('⏳ Tap too fast, skipping for index $index');
       return;
     }
 
     lockedIndexes.add(index);
-
     final isLiked = likedList[index];
+    print('🔘 Initial like state: $isLiked');
 
+    // Optimistic UI update
     setState(() {
       likedList[index] = !isLiked;
-
       threads[index] = {
         ...threads[index],
         'likes': max(0, (threads[index]['likes'] ?? 0) + (!isLiked ? 1 : -1)),
@@ -341,15 +333,17 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
       if (!isLiked && dislikedList[index]) {
         dislikedList[index] = false;
-
         threads[index] = {
           ...threads[index],
           'dislikes': max(0, (threads[index]['dislikes'] ?? 1) - 1),
         };
+        print('✅ Removed dislike because like was toggled ON');
       }
     });
 
     final url = 'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react';
+    print('🌐 Making POST request to: $url');
+    print('📦 Payload: forumId=$forumId, categoryId=${widget.forumData['id']}');
 
     try {
       final response = await http.post(
@@ -365,17 +359,22 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
         }),
       );
 
+      print('📬 Response status: ${response.statusCode}');
+      print('📬 Response body: ${response.body}');
+
       if (response.statusCode == 200 || response.statusCode == 201) {
+        print('✅ Like API success. Emitting socket event...');
         socket.emit('reactThread', {"forumId": forumId});
       } else {
-        print('❌ Server error, restoring like state');
+        print('❌ Like API failed. Reverting optimistic UI update.');
         revertLikeState(index, isLiked);
       }
     } catch (e) {
-      print('❌ Network error: $e');
+      print('❌ Network exception: $e');
       revertLikeState(index, isLiked);
     } finally {
       lockedIndexes.remove(index);
+      print('🔓 Index $index unlocked');
     }
   }
 
