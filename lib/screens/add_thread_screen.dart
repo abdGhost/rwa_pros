@@ -30,6 +30,7 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
   void initState() {
     super.initState();
     _checkLoginStatus();
+    print('🟡 Forum Data: ${widget.forumData}');
 
     _descriptionController = quill.QuillController(
       document: quill.Document(),
@@ -78,7 +79,7 @@ class _AddThreadScreenState extends State<AddThreadScreen> {
           _descriptionController.document
               .toDelta()
               .toJson(), // send as raw delta
-      "categoryId": widget.forumData['id'],
+      "categoryId": widget.forumData['subCategoryId'],
     };
 
     // ✅ Print body before sending

@@ -170,30 +170,46 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       setState(() {
         if (action == 'Added') {
-          if (!isMyAction) dislikeCount += 1;
-          if (likeCount > 0) likeCount -= 1;
+          final shouldIncrement = !isMyAction || !isDisliked;
+
+          if (shouldIncrement) {
+            dislikeCount += 1;
+          }
+
           if (isMyAction) {
-            isDisliked = true;
+            if (isLiked && likeCount > 0) likeCount -= 1;
             isLiked = false;
+            isDisliked = true;
           }
         } else if (action == 'Remove') {
-          if (!isMyAction)
-            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
+          if (dislikeCount > 0) dislikeCount -= 1;
+
           if (isMyAction) {
             isDisliked = false;
           }
         } else if (action == 'Updated') {
-          if (!isMyAction) dislikeCount += 1;
-          if (likeCount > 0) likeCount -= 1;
+          final shouldIncrement = !isMyAction || !isDisliked;
+
+          if (shouldIncrement) {
+            dislikeCount += 1;
+          }
+
+          if (isLiked && likeCount > 0) likeCount -= 1;
+
           if (isMyAction) {
-            isDisliked = true;
             isLiked = false;
+            isDisliked = true;
           }
         }
 
-        print('✅ Updated like/dislike counts: 👍 $likeCount 👎 $dislikeCount');
+        // Clamp safety
+        likeCount = likeCount.clamp(0, double.infinity).toInt();
+        dislikeCount = dislikeCount.clamp(0, double.infinity).toInt();
+
+        print('✅ Updated counts: 👍 $likeCount 👎 $dislikeCount');
+        print('🔢 User state: isLiked=$isLiked, isDisliked=$isDisliked');
         print(
-          '🔢 UI Rebuilding with isLiked = $isLiked and isDisliked = $isDisliked',
+          '🔢 UI Rebuilding with likeCount = $likeCount and isLiked = $isLiked',
         );
       });
     });
@@ -454,6 +470,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "text": _replyController.text.trim(),
       "username": username,
       "quotedCommentId": selectedCommentId ?? "",
+      "subCategoryId": widget.thread['subCategoryId'],
     };
 
     try {
@@ -1124,6 +1141,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "commentId": commentId,
       "categoryId": categoryId,
       "emoji": "",
+      "subCategoryId": widget.thread['subCategoryId'],
     };
 
     print(payload);
@@ -1202,6 +1220,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "commentId": commentId,
       "categoryId": categoryId,
       "emoji": "👎",
+      "subCategoryId": widget.thread['subCategoryId'],
     };
 
     print(payload);
@@ -1274,7 +1293,14 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     final forumId = widget.thread['_id'];
 
     final url = 'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react';
-    final payload = {"forumId": forumId, "emoji": ""};
+    final payload = {
+      "forumId": forumId,
+      "emoji": "",
+      "subCategoryId": widget.thread['subCategoryId'],
+      "categoryId": widget.thread['categoryId'],
+    };
+
+    print(payload);
 
     try {
       final response = await http.post(
@@ -1290,15 +1316,18 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         setState(() {
           if (!isLiked) {
             isLiked = true;
+            likeCount += 1;
           }
           if (isDisliked) {
             isDisliked = false;
+            if (dislikeCount > 0) dislikeCount -= 1;
           }
         });
       } else if (response.statusCode == 200) {
         setState(() {
           if (isLiked) {
             isLiked = false;
+            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else {
@@ -1321,7 +1350,14 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     final url =
         'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react/dislike';
-    final payload = {"forumId": forumId, "emoji": "👎"};
+    final payload = {
+      "forumId": forumId,
+      "emoji": "👎",
+      "subCategoryId": widget.thread['subCategoryId'],
+      "categoryId": widget.thread['categoryId'],
+    };
+
+    print(payload);
 
     try {
       final response = await http.post(
@@ -1337,15 +1373,18 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         setState(() {
           if (!isDisliked) {
             isDisliked = true;
+            dislikeCount += 1;
           }
           if (isLiked) {
             isLiked = false;
+            if (likeCount > 0) likeCount -= 1;
           }
         });
       } else if (response.statusCode == 200) {
         setState(() {
           if (isDisliked) {
             isDisliked = false;
+            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else {

@@ -393,45 +393,45 @@ class _ForumCategoryState extends State<ForumCategory> {
                                   color: theme.cardColor,
                                   child: Column(
                                     children:
-                                        category.subCategories.asMap().entries.map(
-                                          (subEntry) {
-                                            final subIndex = subEntry.key;
-                                            final sub = subEntry.value;
-                                            return SubCategoryTile(
-                                              imageUrl: sub.imageUrl,
-                                              title: sub.name,
-                                              contentTitle: sub.description,
-                                              createdAt: sub.createdAt,
-                                              author: "Admin",
-                                              isLast:
-                                                  subIndex ==
-                                                  category
-                                                          .subCategories
-                                                          .length -
-                                                      1,
-                                              onTap: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder:
-                                                        (
-                                                          _,
-                                                        ) => ForumThreadScreen(
-                                                          forumData: {
-                                                            'id': sub.id,
-                                                            'name': sub.name,
-                                                            'description':
-                                                                sub.description,
-                                                            'categoryId':
-                                                                category.id,
-                                                          },
-                                                        ),
-                                                  ),
-                                                );
-                                              },
-                                            );
-                                          },
-                                        ).toList(),
+                                        category.subCategories.asMap().entries.map((
+                                          subEntry,
+                                        ) {
+                                          final subIndex = subEntry.key;
+                                          final sub = subEntry.value;
+                                          return SubCategoryTile(
+                                            imageUrl: sub.imageUrl,
+                                            title: sub.name,
+                                            contentTitle: sub.description,
+                                            createdAt: sub.createdAt,
+                                            author: "Admin",
+                                            isLast:
+                                                subIndex ==
+                                                category.subCategories.length -
+                                                    1,
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder:
+                                                      (_) => ForumThreadScreen(
+                                                        forumData: {
+                                                          'subCategoryId':
+                                                              sub.id,
+                                                          'subCategoryName':
+                                                              sub.name,
+                                                          'subCategoryDescription':
+                                                              sub.description,
+                                                          'categoryId':
+                                                              category.id,
+                                                          'categoryName':
+                                                              category.name,
+                                                        },
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        }).toList(),
                                   ),
                                 ),
                               ),

@@ -80,7 +80,9 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       socket.emit('joinCategory', {
         'categoryId': widget.forumData['categoryId'],
       });
-      socket.emit('joinSubCategory', {'subCategoryId': widget.forumData['id']});
+      socket.emit('joinSubCategory', {
+        'subCategoryId': widget.forumData['subCategoryId'],
+      });
     });
 
     socket.onDisconnect((_) {
@@ -242,13 +244,13 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
       final response = await http.get(
         Uri.parse(
-          'https://rwa-f1623a22e3ed.herokuapp.com/api/forum?categoryId=${widget.forumData['id']}',
+          'https://rwa-f1623a22e3ed.herokuapp.com/api/forum?categoryId=${widget.forumData['subCategoryId']}',
         ),
         headers: headers,
       );
 
       print(
-        'https://rwa-f1623a22e3ed.herokuapp.com/api/forum?categoryId=${widget.forumData['id']}',
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/forum?categoryId=${widget.forumData['subCategoryId']}',
       );
 
       if (response.statusCode == 200) {
@@ -343,7 +345,9 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
     final url = 'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react';
     print('🌐 Making POST request to: $url');
-    print('📦 Payload: forumId=$forumId, categoryId=${widget.forumData['id']}');
+    print(
+      '📦 Payload: forumId=$forumId, SubCategoryId=${widget.forumData['subCategoryId']}',
+    );
 
     try {
       final response = await http.post(
@@ -355,6 +359,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
         body: jsonEncode({
           "forumId": forumId,
           "categoryId": widget.forumData['id'],
+          "subCategoryId": widget.forumData['subCategoryId'],
           "emoji": "",
         }),
       );
@@ -442,6 +447,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
         body: jsonEncode({
           "forumId": forumId,
           "categoryId": widget.forumData['id'],
+          "subCategoryId": widget.forumData['subCategoryId'],
           "emoji": "👎",
         }),
       );
@@ -506,7 +512,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(
-            widget.forumData['name'],
+            widget.forumData['subCategoryName']?.toString() ?? 'Forum',
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w700,
               fontSize: 18,
@@ -647,9 +653,11 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                       ...thread,
                                       'categoryId':
                                           widget
-                                              .forumData['id'], // ✅ Include categoryId here
+                                              .forumData['categoryId'], // ✅ real categoryId
+                                      'subCategoryId':
+                                          widget
+                                              .forumData['subCategoryId'], // ✅ subcategoryId
                                     },
-
                                     socket: socket,
                                   ),
                             ),
