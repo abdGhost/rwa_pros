@@ -107,49 +107,37 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     });
 
     socket.on('reactToForum', (data) async {
-      if (!mounted) return;
-
-      print('🔔 reactToForum received: $data');
+      if (!mounted || isMainReactionProcessing) return;
 
       final updatedThreadId = data['forumId'];
       final reactorUserId = data['userId'];
       final action = data['action'];
+      final reactions = data['reactions'] as Map<String, dynamic>? ?? {};
 
-      if (updatedThreadId != widget.thread['_id']) {
-        print('⚠️ Reaction is for a different thread, ignoring');
-        return;
-      }
+      if (updatedThreadId != widget.thread['_id']) return;
 
       final prefs = await SharedPreferences.getInstance();
       final currentUserId = prefs.getString('userId') ?? '';
       final isMyAction = reactorUserId == currentUserId;
 
       setState(() {
-        if (action == 'Added') {
-          if (!isMyAction) likeCount += 1;
-          if (dislikeCount > 0) dislikeCount -= 1;
-          if (isMyAction) {
+        likeCount =
+            (reactions['👍'] ?? likeCount).clamp(0, double.infinity).toInt();
+        dislikeCount =
+            (reactions['👎'] ?? dislikeCount).clamp(0, double.infinity).toInt();
+
+        if (isMyAction) {
+          if (action == 'Added' || action == 'Updated') {
             isLiked = true;
             isDisliked = false;
-          }
-        } else if (action == 'Remove') {
-          if (!isMyAction)
-            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
-          if (isMyAction) {
+          } else if (action == 'Remove') {
             isLiked = false;
           }
-        } else if (action == 'Updated') {
-          if (!isMyAction) likeCount += 1;
-          if (dislikeCount > 0) dislikeCount -= 1;
-          if (isMyAction) {
-            isLiked = true;
-            isDisliked = false;
-          }
-        } else {
-          print('⚠️ Unknown action: $action');
         }
 
-        print('✅ Updated like/dislike counts: 👍 $likeCount 👎 $dislikeCount');
+        print(
+          '🔁 reactToForum: 👍 $likeCount 👎 $dislikeCount isLiked=$isLiked isDisliked=$isDisliked',
+        );
       });
     });
 
@@ -1300,8 +1288,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "categoryId": widget.thread['categoryId'],
     };
 
-    print(payload);
-
     try {
       final response = await http.post(
         Uri.parse(url),
@@ -1312,29 +1298,30 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         body: jsonEncode(payload),
       );
 
-      if (response.statusCode == 201) {
-        setState(() {
+      setState(() {
+        if (response.statusCode == 201) {
           if (!isLiked) {
             isLiked = true;
             likeCount += 1;
           }
-          if (isDisliked) {
+          if (isDisliked && dislikeCount > 0) {
             isDisliked = false;
-            if (dislikeCount > 0) dislikeCount -= 1;
+            dislikeCount -= 1;
           }
-        });
-      } else if (response.statusCode == 200) {
-        setState(() {
-          if (isLiked) {
+        } else if (response.statusCode == 200) {
+          if (isLiked && likeCount > 0) {
             isLiked = false;
-            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
+            likeCount -= 1;
           }
-        });
-      } else {
-        print("❌ Failed to like: ${response.body}");
-      }
+        } else {
+          print("❌ Like failed: ${response.body}");
+        }
+
+        likeCount = likeCount.clamp(0, double.infinity).toInt();
+        dislikeCount = dislikeCount.clamp(0, double.infinity).toInt();
+      });
     } catch (e) {
-      print("❌ Error liking: $e");
+      print("❌ Error liking post: $e");
     } finally {
       isMainReactionProcessing = false;
     }
@@ -1357,8 +1344,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "categoryId": widget.thread['categoryId'],
     };
 
-    print(payload);
-
     try {
       final response = await http.post(
         Uri.parse(url),
@@ -1369,29 +1354,30 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         body: jsonEncode(payload),
       );
 
-      if (response.statusCode == 201) {
-        setState(() {
+      setState(() {
+        if (response.statusCode == 201) {
           if (!isDisliked) {
             isDisliked = true;
             dislikeCount += 1;
           }
-          if (isLiked) {
+          if (isLiked && likeCount > 0) {
             isLiked = false;
-            if (likeCount > 0) likeCount -= 1;
+            likeCount -= 1;
           }
-        });
-      } else if (response.statusCode == 200) {
-        setState(() {
-          if (isDisliked) {
+        } else if (response.statusCode == 200) {
+          if (isDisliked && dislikeCount > 0) {
             isDisliked = false;
-            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
+            dislikeCount -= 1;
           }
-        });
-      } else {
-        print("❌ Failed to dislike: ${response.body}");
-      }
+        } else {
+          print("❌ Dislike failed: ${response.body}");
+        }
+
+        likeCount = likeCount.clamp(0, double.infinity).toInt();
+        dislikeCount = dislikeCount.clamp(0, double.infinity).toInt();
+      });
     } catch (e) {
-      print("❌ Error disliking: $e");
+      print("❌ Error disliking post: $e");
     } finally {
       isMainReactionProcessing = false;
     }
