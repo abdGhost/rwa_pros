@@ -349,7 +349,9 @@ class _ForumCategoryState extends State<ForumCategory> {
       ),
       body:
           isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+              )
               : SingleChildScrollView(
                 child: Column(
                   children:

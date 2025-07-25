@@ -556,7 +556,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         appBar: AppBar(title: Text(title)),
         body:
             isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+                )
                 : Column(
                   children: [
                     Expanded(

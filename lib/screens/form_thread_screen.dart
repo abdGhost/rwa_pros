@@ -520,20 +520,21 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                 ? ListView.builder(
                   itemCount: 5,
                   padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 12,
-                  ),
+                    vertical: 4,
+                  ), // ✅ No horizontal padding
                   itemBuilder: (context, index) {
                     return Shimmer.fromColors(
                       baseColor: Colors.grey[300]!,
                       highlightColor: Colors.grey[100]!,
-                      child: Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
+                      child: Container(
+                        width: double.infinity, // ✅ Full width container
                         margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
+                        child: Card(
+                          margin:
+                              EdgeInsets.zero, // ✅ Prevent card internal margin
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -544,6 +545,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                 color: Colors.white,
                               ),
                               const SizedBox(height: 6),
+
                               // Description skeleton (2 lines)
                               Container(
                                 width: double.infinity,
@@ -557,6 +559,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                 color: Colors.white,
                               ),
                               const SizedBox(height: 8),
+
                               // Author skeleton
                               Container(
                                 width: 80,
@@ -564,6 +567,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                 color: Colors.white,
                               ),
                               const SizedBox(height: 12),
+
                               // Reaction icons row skeleton
                               Row(
                                 children: [
@@ -574,6 +578,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                     color: Colors.white,
                                   ),
                                   const SizedBox(width: 20),
+
                                   // Dislike icon + count
                                   Container(
                                     width: 50,
@@ -581,6 +586,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                     color: Colors.white,
                                   ),
                                   const SizedBox(width: 20),
+
                                   // Comment icon + count
                                   Container(
                                     width: 50,
@@ -588,6 +594,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                     color: Colors.white,
                                   ),
                                   const Spacer(),
+
                                   // Time ago skeleton
                                   Container(
                                     width: 40,
@@ -622,7 +629,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                     itemCount: threads.length,
                     padding: const EdgeInsets.symmetric(
                       vertical: 8,
-                      horizontal: 12,
+                      // horizontal: 12,
                     ),
                     itemBuilder: (context, index) {
                       final thread = threads[index];
@@ -677,7 +684,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                         child: Card(
                           color: theme.cardColor,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(0),
                           ),
                           elevation: 0.04,
                           margin: const EdgeInsets.symmetric(vertical: 6),
@@ -687,6 +694,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Profile image or initial
                                     if (thread['profileImage'] != null &&
@@ -702,7 +710,9 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                     else
                                       CircleAvatar(
                                         radius: 18,
-                                        backgroundColor: Color(0xFFEBB411),
+                                        backgroundColor: const Color(
+                                          0xFFEBB411,
+                                        ),
                                         child: Text(
                                           thread['author'].toString().isNotEmpty
                                               ? thread['author'][0]
@@ -716,164 +726,167 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                       ),
                                     const SizedBox(width: 10),
 
+                                    // Right side: title, author, and actions
                                     Expanded(
-                                      child: Text(
-                                        thread['title'].toString().isNotEmpty
-                                            ? '${thread['title'][0].toUpperCase()}${thread['title'].substring(1)}'
-                                            : '',
-                                        style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 13,
-                                          color:
-                                              theme
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.color,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 4),
-                                Text(
-                                  '- ${thread['author']}',
-                                  style: GoogleFonts.inter(
-                                    fontStyle: FontStyle.italic,
-                                    fontWeight: FontWeight.w400,
-                                    fontSize: 12,
-                                    color: theme.textTheme.bodySmall?.color
-                                        ?.withOpacity(0.6),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    InkWell(
-                                      onTap: () {
-                                        reactToThread(thread['_id'], index);
-                                      },
-                                      child: Row(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Icon(
-                                            isLiked
-                                                ? Icons.thumb_up_outlined
-                                                : Icons.thumb_up_alt_outlined,
-                                            size: 18,
-                                            color:
-                                                isLiked
-                                                    ? Color(0xFFEBB411)
-                                                    : Colors.grey[600],
-                                          ),
-                                          const SizedBox(width: 4),
                                           Text(
-                                            // '${thread['likes']} likes',
-                                            '${thread['likes']}',
+                                            thread['title']
+                                                    .toString()
+                                                    .isNotEmpty
+                                                ? '${thread['title'][0].toUpperCase()}${thread['title'].substring(1)}'
+                                                : '',
                                             style: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 13,
+                                              color:
+                                                  theme
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.color,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '- ${thread['author']}',
+                                            style: GoogleFonts.inter(
+                                              fontStyle: FontStyle.italic,
                                               fontWeight: FontWeight.w400,
                                               fontSize: 12,
-                                              color:
-                                                  isLiked
-                                                      ? Color(0xFFEBB411)
-                                                      : theme
+                                              color: theme
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.color
+                                                  ?.withOpacity(0.6),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            children: [
+                                              InkWell(
+                                                onTap:
+                                                    () => reactToThread(
+                                                      thread['_id'],
+                                                      index,
+                                                    ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      isLiked
+                                                          ? Icons
+                                                              .thumb_up_outlined
+                                                          : Icons
+                                                              .thumb_up_alt_outlined,
+                                                      size: 18,
+                                                      color:
+                                                          isLiked
+                                                              ? const Color(
+                                                                0xFFEBB411,
+                                                              )
+                                                              : Colors
+                                                                  .grey[600],
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${thread['likes']}',
+                                                      style: GoogleFonts.inter(
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                        fontSize: 12,
+                                                        color:
+                                                            isLiked
+                                                                ? const Color(
+                                                                  0xFFEBB411,
+                                                                )
+                                                                : theme
+                                                                    .textTheme
+                                                                    .bodySmall
+                                                                    ?.color
+                                                                    ?.withOpacity(
+                                                                      0.85,
+                                                                    ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 20),
+                                              InkWell(
+                                                onTap:
+                                                    () => dislikeToThread(
+                                                      thread['_id'],
+                                                      index,
+                                                    ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      isDisliked
+                                                          ? Icons
+                                                              .thumb_down_outlined
+                                                          : Icons
+                                                              .thumb_down_alt_outlined,
+                                                      size: 18,
+                                                      color:
+                                                          isDisliked
+                                                              ? Colors.red
+                                                              : Colors
+                                                                  .grey[600],
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '$dislikeCount',
+                                                      style: GoogleFonts.inter(
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                        fontSize: 12,
+                                                        color:
+                                                            isDisliked
+                                                                ? Colors.red
+                                                                : Colors
+                                                                    .grey[600],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 20),
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.mode_comment_outlined,
+                                                    size: 18,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '${thread['replies']}',
+                                                    style: GoogleFonts.inter(
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                      fontSize: 12,
+                                                      color: theme
                                                           .textTheme
                                                           .bodySmall
                                                           ?.color
                                                           ?.withOpacity(0.85),
-                                            ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const Spacer(),
+                                              Text(
+                                                timeAgo(thread['createdAt']),
+                                                style: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w400,
+                                                  fontSize: 11,
+                                                  color: Colors.grey[500],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 20),
-
-                                    InkWell(
-                                      onTap: () {
-                                        dislikeToThread(thread['_id'], index);
-                                      },
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            isDisliked
-                                                ? Icons.thumb_down_outlined
-                                                : Icons.thumb_down_alt_outlined,
-                                            size: 18,
-                                            color:
-                                                isDisliked
-                                                    ? Colors.red
-                                                    : Colors.grey[600],
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '$dislikeCount',
-                                            style: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w400,
-                                              fontSize: 12,
-                                              color:
-                                                  isDisliked
-                                                      ? Colors.red
-                                                      : Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 20),
-
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.mode_comment_outlined,
-                                          size: 18,
-                                          color: Colors.grey[600],
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          // '${thread['replies']} discussions',
-                                          '${thread['replies']}',
-                                          style: GoogleFonts.inter(
-                                            fontWeight: FontWeight.w400,
-                                            fontSize: 12,
-                                            color: theme
-                                                .textTheme
-                                                .bodySmall
-                                                ?.color
-                                                ?.withOpacity(0.85),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-
-                                    // SizedBox(width: 20),
-                                    // Row(
-                                    //   children: [
-                                    //     Icon(
-                                    //       Icons.remove_red_eye_outlined,
-                                    //       size: 18,
-                                    //       color: Colors.grey[600],
-                                    //     ),
-                                    //     const SizedBox(width: 4),
-                                    //     Text(
-                                    //       '20',
-                                    //       style: GoogleFonts.inter(
-                                    //         fontWeight: FontWeight.w400,
-                                    //         fontSize: 12,
-                                    //         color: theme
-                                    //             .textTheme
-                                    //             .bodySmall
-                                    //             ?.color
-                                    //             ?.withOpacity(0.85),
-                                    //       ),
-                                    //     ),
-                                    //   ],
-                                    // ),
-                                    const Spacer(),
-                                    Text(
-                                      timeAgo(thread['createdAt']),
-                                      style: GoogleFonts.inter(
-                                        fontWeight: FontWeight.w400,
-                                        fontSize: 11,
-                                        color: Colors.grey[500],
                                       ),
                                     ),
                                   ],
