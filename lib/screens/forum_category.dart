@@ -9,6 +9,8 @@ import 'package:rwa_app/screens/forum/category_modal.dart';
 import 'package:rwa_app/screens/forum/hot_topic_modal.dart';
 import 'package:rwa_app/screens/forum/recent_thread.dart';
 import 'package:rwa_app/screens/forum/subcategory_tile.dart';
+import 'package:rwa_app/screens/thread_details_screen.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:rwa_app/screens/profile_screen.dart';
 
@@ -115,23 +117,36 @@ class _ForumCategoryState extends State<ForumCategory> {
             ...hotTopics
                 .take(3)
                 .map(
-                  (topic) => GestureDetector(
+                  (topic) => InkWell(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder:
-                              (_) => ForumThreadScreen(
-                                forumData: {
-                                  'id': topic.categoryId,
-                                  'name': topic.title,
-                                  'description': topic.text ?? '',
-                                  'categoryId': topic.id,
+                              (_) => ThreadDetailScreen(
+                                thread: {
+                                  '_id': topic.id,
+                                  'title': topic.title,
+                                  'text': topic.text ?? '',
+                                  'userId': topic.userId,
+                                  'userName': topic.userName,
+                                  'commentsCount': topic.commentsCount,
+                                  'categoryId': topic.categoryId,
+                                  'subCategoryId':
+                                      topic
+                                          .categoryId, // same as category for now
                                 },
+                                socket: IO.io(
+                                  'https://rwa-f1623a22e3ed.herokuapp.com',
+                                  IO.OptionBuilder().setTransports([
+                                    'websocket',
+                                  ]).build(),
+                                ),
                               ),
                         ),
                       );
                     },
+
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
