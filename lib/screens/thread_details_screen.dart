@@ -47,6 +47,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   bool isSending = false;
   bool _isDescriptionExpanded = false;
   bool isMainReactionProcessing = false;
+  Map<String, DateTime> tapTimestamps = {};
 
   @override
   void initState() {
@@ -105,7 +106,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       });
     });
 
-    socket.on('reactToForumForDetailPage', (data) async {
+    socket.on('reactToForumForForumPage', (data) async {
       if (!mounted) return;
 
       print('🔔 reactToForum received: $data');
@@ -519,6 +520,18 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     return true;
   }
 
+  bool canTap(String key) {
+    final now = DateTime.now();
+    final lastTap = tapTimestamps[key];
+
+    if (lastTap != null && now.difference(lastTap) < Duration(seconds: 1)) {
+      return false;
+    }
+
+    tapTimestamps[key] = now;
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -677,7 +690,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 });
               },
             ),
-
             const SizedBox(height: 8),
             Text(
               "- $author",
@@ -693,6 +705,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 // LIKE BUTTON
                 InkWell(
                   onTap: () async {
+                    if (isMainReactionProcessing) return;
                     if (await _ensureLoggedIn()) _toggleMainPostLike();
                   },
                   child: Row(
@@ -714,12 +727,13 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
+
                 // DISLIKE BUTTON
                 InkWell(
                   onTap: () async {
+                    if (isMainReactionProcessing) return;
                     if (await _ensureLoggedIn()) _toggleMainPostDislike();
                   },
-
                   child: Row(
                     children: [
                       Icon(
@@ -739,7 +753,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                // Comments
+
+                // COMMENTS
                 Icon(
                   Icons.mode_comment_outlined,
                   size: 18,
@@ -1041,6 +1056,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   }
 
   Future<void> _toggleReplyLike(int index) async {
+    if (!canTap('replyLike_$index')) return;
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
     final commentId = replies[index]['id'];
@@ -1124,6 +1141,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   }
 
   Future<void> _toggleReplyDislike(int index) async {
+    if (!canTap('replyDislike_$index')) return;
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
     final commentId = replies[index]['id'];
@@ -1210,7 +1228,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   }
 
   Future<void> _toggleMainPostLike() async {
-    if (isMainReactionProcessing) return; // prevent multiple taps
+    if (isMainReactionProcessing || !canTap('mainLike')) return;
     isMainReactionProcessing = true;
 
     final prefs = await SharedPreferences.getInstance();
@@ -1232,30 +1250,34 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       if (response.statusCode == 201) {
         setState(() {
-          isLiked = true;
-          likeCount = 1; // max 1
+          if (!isLiked) {
+            isLiked = true;
+            likeCount += 1;
+          }
           if (isDisliked) {
             isDisliked = false;
-            dislikeCount = 0;
+            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else if (response.statusCode == 200) {
         setState(() {
-          isLiked = false;
-          likeCount = 0;
+          if (isLiked) {
+            isLiked = false;
+            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
+          }
         });
       } else {
-        print("❌ Failed to react to forum: ${response.body}");
+        print("❌ Failed to like: ${response.body}");
       }
     } catch (e) {
-      print("❌ Error reacting to forum: $e");
+      print("❌ Error liking: $e");
     } finally {
       isMainReactionProcessing = false;
     }
   }
 
   Future<void> _toggleMainPostDislike() async {
-    if (isMainReactionProcessing) return;
+    if (isMainReactionProcessing || !canTap('mainDislike')) return;
     isMainReactionProcessing = true;
 
     final prefs = await SharedPreferences.getInstance();
@@ -1278,23 +1300,27 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
       if (response.statusCode == 201) {
         setState(() {
-          isDisliked = true;
-          dislikeCount = 1;
+          if (!isDisliked) {
+            isDisliked = true;
+            dislikeCount += 1;
+          }
           if (isLiked) {
             isLiked = false;
-            likeCount = 0;
+            likeCount = (likeCount - 1).clamp(0, double.infinity).toInt();
           }
         });
       } else if (response.statusCode == 200) {
         setState(() {
-          isDisliked = false;
-          dislikeCount = 0;
+          if (isDisliked) {
+            isDisliked = false;
+            dislikeCount = (dislikeCount - 1).clamp(0, double.infinity).toInt();
+          }
         });
       } else {
-        print("❌ Failed to dislike forum: ${response.body}");
+        print("❌ Failed to dislike: ${response.body}");
       }
     } catch (e) {
-      print("❌ Error disliking forum: $e");
+      print("❌ Error disliking: $e");
     } finally {
       isMainReactionProcessing = false;
     }
