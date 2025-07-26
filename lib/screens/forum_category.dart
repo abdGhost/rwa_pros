@@ -239,23 +239,35 @@ class _ForumCategoryState extends State<ForumCategory> {
             ...recentThreads
                 .take(10)
                 .map(
-                  (thread) => GestureDetector(
+                  (thread) => InkWell(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder:
-                              (_) => ForumThreadScreen(
-                                forumData: {
-                                  'id': thread.categoryId,
-                                  'name': thread.title,
-                                  'description': thread.text,
-                                  'categoryId': thread.id,
+                              (_) => ThreadDetailScreen(
+                                thread: {
+                                  '_id': thread.id,
+                                  'title': thread.title,
+                                  'text': thread.text ?? '',
+                                  'userName': thread.userName,
+                                  'commentsCount': thread.commentsCount,
+                                  'categoryId': thread.categoryId,
+                                  'subCategoryId':
+                                      thread
+                                          .categoryId, // fallback as no subCat
                                 },
+                                socket: IO.io(
+                                  'https://rwa-f1623a22e3ed.herokuapp.com',
+                                  IO.OptionBuilder().setTransports([
+                                    'websocket',
+                                  ]).build(),
+                                ),
                               ),
                         ),
                       );
                     },
+
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
