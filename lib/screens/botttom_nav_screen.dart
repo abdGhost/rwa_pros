@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rwa_app/screens/airdropAndEventScreen.dart';
 import 'package:rwa_app/screens/airdrop_screen.dart';
 import 'package:rwa_app/screens/forum_category.dart';
 import 'package:rwa_app/screens/forum_screen.dart';
@@ -23,7 +24,8 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   final List<Widget> _pages = const [
     HomeScreen(),
     NewsScreen(),
-    AirdropScreen(),
+    // AirdropScreen(),
+    AirdropAndEventScreen(),
     PortfolioScreen(),
     // TreasuryScreen(),
     // ForumScreen(),

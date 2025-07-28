@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:rwa_app/screens/airdrop_details_screen.dart';
 import 'package:rwa_app/screens/chat_screen.dart';
 import 'package:rwa_app/screens/coming_soon.dart';
+import 'package:rwa_app/screens/profile_screen.dart';
 import 'package:rwa_app/widgets/airdrop/airdrop_card.dart';
 import 'package:rwa_app/widgets/filter_tab_widget.dart';
 
@@ -110,65 +111,6 @@ class _AirdropScreenState extends State<AirdropScreen> {
     }
   }
 
-  // Future<void> fetchAirdrops() async {
-  //   final url = Uri.parse(
-  //     'https://rwa-f1623a22e3ed.herokuapp.com/api/admin/airdrop/get/allAirdrop',
-  //   );
-  //   try {
-  //     final response = await http.get(url);
-  //     final data = json.decode(response.body);
-  //     final List fetched = data["data"];
-  //     print('airdrop Data $fetched');
-
-  //     setState(() {
-  //       airdrops =
-  //           fetched.map<Map<String, String>>((item) {
-  //             // Parse custom date format
-  //             final dateFormat = DateFormat('dd/MM/yyyy');
-  //             DateTime start = dateFormat.parse(item['airdropStart']);
-  //             DateTime end = dateFormat.parse(item['airdropEnd']);
-  //             final now = DateTime.now();
-
-  //             bool isLive = now.isAfter(start) && now.isBefore(end);
-  //             bool isEnded = now.isAfter(end);
-
-  //             String category =
-  //                 isLive
-  //                     ? "Live"
-  //                     : isEnded
-  //                     ? "Ended"
-  //                     : "Upcoming";
-
-  //             return {
-  //               '_id': item['_id'],
-  //               'project': item['tokenName'].trim(),
-  //               'token': item['tokenTicker'],
-  //               'chain': item['chain'],
-  //               'reward': item['airdropAmt'],
-  //               'image': item['image'],
-  //               'description': item['tokenDescription'],
-  //               'date':
-  //                   "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
-  //               'eligibility': item['airdropEligibility'],
-  //               'status':
-  //                   isLive
-  //                       ? "Live"
-  //                       : isEnded
-  //                       ? "Ended"
-  //                       : "Upcoming",
-  //               'category': category,
-  //             };
-  //           }).toList();
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     debugPrint('❌ Error fetching airdrops: $e');
-  //     setState(() {
-  //       _isLoading = false;
-  //     });
-  //   }
-  // }
-
   List<Map<String, String>> get filteredAirdrops {
     if (_selectedTab == "Recently Added") return airdrops;
     return airdrops.where((drop) => drop['category'] == _selectedTab).toList();
@@ -181,20 +123,53 @@ class _AirdropScreenState extends State<AirdropScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF7F7F7),
+      appBar: AppBar(
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: theme.appBarTheme.elevation,
+        toolbarHeight: 60,
+        title: Row(
+          children: [
+            Text(
+              'Airdrops',
+              style: GoogleFonts.inter(
+                textStyle: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: SvgPicture.asset(
+              'assets/profile_outline.svg',
+              width: 30,
+              color: theme.iconTheme.color,
+            ),
+            onPressed:
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                ),
+          ),
+        ],
+      ),
+
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 12),
-            Center(
-              child: Image.asset(
-                'assets/airdrop.png',
-                width: double.infinity,
-                height: 210,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(height: 12),
+            // Center(
+            //   child: Image.asset(
+            //     'assets/airdrop.png',
+            //     width: double.infinity,
+            //     height: 210,
+            //     fit: BoxFit.cover,
+            //   ),
+            // ),
+            // const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),

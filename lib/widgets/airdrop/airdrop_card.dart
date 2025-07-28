@@ -153,13 +153,13 @@ class AirdropCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    "⏰ Set Reminder",
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.white : Colors.black,
-                    ),
-                  ),
+                  // Text(
+                  //   "⏰ Set Reminder",
+                  //   style: TextStyle(
+                  //     fontSize: 14,
+                  //     color: isDarkMode ? Colors.white : Colors.black,
+                  //   ),
+                  // ),
                 ],
               ),
             ],
