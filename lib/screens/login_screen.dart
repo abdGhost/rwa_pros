@@ -103,14 +103,50 @@ class _LoginScreenState extends State<LoginScreen> {
         print('---------------------------------------------');
         print('${response}');
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', response['token']);
-        await prefs.setString('email', email);
-        await prefs.setString('name', response['userName'] ?? "");
-        await prefs.setString('profileImage', response['profileImg'] ?? "");
-        await prefs.setString('userId', response['userId'] ?? "");
+
+        // ✅ Save user details
+        await prefs.setString('token', response['token'] ?? "");
+        await prefs.setString('email', response['email'] ?? "");
+        await prefs.setString('name', response['name'] ?? "");
+        await prefs.setString('userId', response['_id'] ?? "");
         await prefs.setString('loginMethod', 'email');
 
-        await sendFcmTokenToBackend(response['token']); // ✅
+        // Optional: Default/fallback values if profileImage is not sent
+        await prefs.setString('profileImage', response['profileImg'] ?? "");
+
+        // ✅ Save forum-related stats
+        final stat = response['stat'];
+        if (stat != null) {
+          await prefs.setInt(
+            'totalCommentGiven',
+            stat['totalCommentGiven'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalCommentReceived',
+            stat['totalCommentReceived'] ?? 0,
+          );
+          await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
+          await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
+          await prefs.setInt(
+            'totalLikeReceived',
+            stat['totalLikeReceived'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalThreadPosted',
+            stat['totalThreadPosted'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalViewReceived',
+            stat['totalViewReceived'] ?? 0,
+          );
+          await prefs.setString(
+            'tieredProgression',
+            stat['tieredProgression'] ?? "New user",
+          );
+        }
+
+        // ✅ Send FCM token
+        await sendFcmTokenToBackend(response['token']);
 
         _showSnackBar("Login successful!");
         Navigator.pushReplacement(
@@ -177,14 +213,50 @@ class _LoginScreenState extends State<LoginScreen> {
       final json = jsonDecode(response.body);
       if (response.statusCode == 200 && json['status'] == true) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', json['token']);
-        await prefs.setString('email', payload['email'] ?? "");
-        await prefs.setString('name', payload['userName'] ?? "");
+
+        // ✅ Basic user info
+        await prefs.setString('token', json['token'] ?? "");
+        await prefs.setString('email', json['email'] ?? "");
+        await prefs.setString(
+          'name',
+          json['name'] ?? payload['userName'] ?? "",
+        );
         await prefs.setString('profileImage', payload['profileImg'] ?? "");
-        await prefs.setString('userId', json['userId'] ?? user.uid);
+        await prefs.setString('userId', json['_id'] ?? user.uid);
         await prefs.setString('loginMethod', 'google');
 
-        await sendFcmTokenToBackend(json['token']); // ✅
+        // ✅ Forum stats
+        final stat = json['stat'];
+        if (stat != null) {
+          await prefs.setInt(
+            'totalCommentGiven',
+            stat['totalCommentGiven'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalCommentReceived',
+            stat['totalCommentReceived'] ?? 0,
+          );
+          await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
+          await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
+          await prefs.setInt(
+            'totalLikeReceived',
+            stat['totalLikeReceived'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalThreadPosted',
+            stat['totalThreadPosted'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalViewReceived',
+            stat['totalViewReceived'] ?? 0,
+          );
+          await prefs.setString(
+            'tieredProgression',
+            stat['tieredProgression'] ?? "New user",
+          );
+        }
+
+        await sendFcmTokenToBackend(json['token']); // ✅ FCM
 
         _showSnackBar("Google sign-in successful!");
         Navigator.pushReplacement(
@@ -240,12 +312,48 @@ class _LoginScreenState extends State<LoginScreen> {
       final json = jsonDecode(response.body);
       if (response.statusCode == 200 && json['status'] == true) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', json['token']);
-        await prefs.setString('email', payload['email'] ?? "");
-        await prefs.setString('name', payload['userName'] ?? "");
+
+        // ✅ Basic info
+        await prefs.setString('token', json['token'] ?? "");
+        await prefs.setString('email', json['email'] ?? "");
+        await prefs.setString(
+          'name',
+          json['name'] ?? payload['userName'] ?? "",
+        );
         await prefs.setString('profileImage', "");
-        await prefs.setString('userId', json['userId'] ?? user.uid);
+        await prefs.setString('userId', json['_id'] ?? user.uid);
         await prefs.setString('loginMethod', 'apple');
+
+        // ✅ Forum stats
+        final stat = json['stat'];
+        if (stat != null) {
+          await prefs.setInt(
+            'totalCommentGiven',
+            stat['totalCommentGiven'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalCommentReceived',
+            stat['totalCommentReceived'] ?? 0,
+          );
+          await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
+          await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
+          await prefs.setInt(
+            'totalLikeReceived',
+            stat['totalLikeReceived'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalThreadPosted',
+            stat['totalThreadPosted'] ?? 0,
+          );
+          await prefs.setInt(
+            'totalViewReceived',
+            stat['totalViewReceived'] ?? 0,
+          );
+          await prefs.setString(
+            'tieredProgression',
+            stat['tieredProgression'] ?? "New user",
+          );
+        }
 
         await sendFcmTokenToBackend(json['token']); // ✅
 
@@ -255,7 +363,7 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (_) => const BottomNavScreen()),
         );
       } else {
-        _showSnackBar("Authentication failed");
+        _showSnackBar(json['message'] ?? "Authentication failed");
       }
     } catch (e) {
       _showSnackBar("Apple Sign-In failed");

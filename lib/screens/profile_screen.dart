@@ -5,6 +5,7 @@ import 'package:flutter_switch/flutter_switch.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:rwa_app/screens/html_content_modal.dart';
+import 'package:rwa_app/screens/profile/new_profile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -98,10 +99,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed:
+                            // () => Navigator.push(
+                            //   context,
+                            //   MaterialPageRoute(
+                            //     builder: (context) => const MyAccountScreen(),
+                            //   ),
+                            // ),
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const MyAccountScreen(),
+                                builder: (context) => const NewProfileScreen(),
                               ),
                             ),
                         style: ElevatedButton.styleFrom(

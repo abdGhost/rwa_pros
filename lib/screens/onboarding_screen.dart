@@ -18,6 +18,49 @@ import 'package:rwa_app/widgets/social_auth_widget.dart';
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
 
+  Future<void> sendFcmTokenToBackend(String jwtToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    final savedFcmToken = prefs.getString('fcm_token');
+
+    debugPrint('📦 Stored FCM Token: $savedFcmToken');
+    debugPrint('📲 Current FCM Token: $fcmToken');
+    debugPrint('🔐 JWT Token: $jwtToken');
+
+    if (fcmToken == null || jwtToken.isEmpty) {
+      debugPrint("❌ Cannot send FCM token. Token or JWT missing.");
+      return;
+    }
+
+    if (fcmToken == savedFcmToken) {
+      debugPrint("⏩ FCM token already sent. Skipping...");
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://rwa-f1623a22e3ed.herokuapp.com/api/users/fcmtoken'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({'token': fcmToken}),
+      );
+
+      debugPrint("📡 FCM Upload Status: ${response.statusCode}");
+      debugPrint("📡 FCM Upload Response: ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await prefs.setString('fcm_token', fcmToken);
+        debugPrint("✅ FCM token saved to backend and local prefs");
+      } else {
+        debugPrint("⚠️ Failed to send FCM token: ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("❌ Exception sending FCM token: $e");
+    }
+  }
+
   Future<void> _handleGoogleSignIn(BuildContext context) async {
     try {
       _showSnackBar(context, "Signing in with Google...");
@@ -51,7 +94,6 @@ class OnboardingScreen extends StatelessWidget {
 
       final prefs = await SharedPreferences.getInstance();
 
-      // Prepare user payload for backend auth
       final payload = {
         "userName": user.displayName ?? "No Name",
         "profileImg": user.photoURL ?? "",
@@ -59,7 +101,8 @@ class OnboardingScreen extends StatelessWidget {
         "googleId": user.uid,
       };
 
-      // Authenticate with backend
+      print(payload);
+
       final response = await http.post(
         Uri.parse(
           "https://rwa-f1623a22e3ed.herokuapp.com/api/users/auth/google",
@@ -73,12 +116,44 @@ class OnboardingScreen extends StatelessWidget {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         if (json['status'] == true) {
+          // ✅ Save user info
           await prefs.setString('token', json['token'] ?? "");
-          await prefs.setString('email', payload['email']!);
-          await prefs.setString('name', payload['userName']!);
-          await prefs.setString('profileImage', payload['profileImg']!);
+          await prefs.setString('email', payload['email'] ?? "");
+          await prefs.setString('name', payload['userName'] ?? "");
+          await prefs.setString('profileImage', payload['profileImg'] ?? "");
           await prefs.setString('loginMethod', 'google');
-          await prefs.setString('userId', json['id']);
+          await prefs.setString('userId', json['_id'] ?? "");
+
+          // ✅ Save user stat info
+          final stat = json['stat'];
+          if (stat != null) {
+            await prefs.setInt(
+              'totalCommentGiven',
+              stat['totalCommentGiven'] ?? 0,
+            );
+            await prefs.setInt(
+              'totalCommentReceived',
+              stat['totalCommentReceived'] ?? 0,
+            );
+            await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
+            await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
+            await prefs.setInt(
+              'totalLikeReceived',
+              stat['totalLikeReceived'] ?? 0,
+            );
+            await prefs.setInt(
+              'totalThreadPosted',
+              stat['totalThreadPosted'] ?? 0,
+            );
+            await prefs.setInt(
+              'totalViewReceived',
+              stat['totalViewReceived'] ?? 0,
+            );
+            await prefs.setString(
+              'tieredProgression',
+              stat['tieredProgression'] ?? "New user",
+            );
+          }
 
           _showSnackBar(context, "Google sign-in successful!");
 
@@ -91,15 +166,13 @@ class OnboardingScreen extends StatelessWidget {
           print('📲 New FCM Token: $fcmToken');
           print('🔐 JWT Token: $jwt');
 
-          // Upload if token is new and user is authenticated
+          // Upload FCM token
           if (fcmToken != null && jwt != null && fcmToken != savedFcmToken) {
             try {
               final fcmRes = await http.post(
-                // Uri.parse('http://192.168.1.9:5001/api/users/fcmtoken'),
                 Uri.parse(
-                  'https://rwa-f1623a22e3ed.herokuapp.com/api/users/fcmtoken',
+                  "https://rwa-f1623a22e3ed.herokuapp.com/api/users/fcmtoken",
                 ),
-
                 headers: {
                   'Content-Type': 'application/json',
                   'Authorization': 'Bearer $jwt',
@@ -121,7 +194,7 @@ class OnboardingScreen extends StatelessWidget {
             }
           }
 
-          // Navigate to home
+          // ✅ Navigate to home
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const BottomNavScreen()),
@@ -160,7 +233,6 @@ class OnboardingScreen extends StatelessWidget {
       final user = userCred.user;
       if (user == null) throw Exception("Apple Sign-In failed");
 
-      // Prepare payload for backend
       final payload = {
         "userName": user.displayName ?? appleCred.givenName ?? "Apple User",
         "profileImg": "",
@@ -181,17 +253,48 @@ class OnboardingScreen extends StatelessWidget {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         if (json['status'] == true) {
-          await prefs.setString('token', json['token']);
+          // ✅ Save user details
+          await prefs.setString('token', json['token'] ?? "");
           await prefs.setString('email', payload['email'] ?? "");
           await prefs.setString('name', payload['userName'] ?? "");
-          await prefs.setString('profileImg', "");
+          await prefs.setString('profileImage', "");
           await prefs.setString('loginMethod', 'apple');
-          final userId = json['userId'] ?? user.uid;
-          await prefs.setString('userId', userId);
+          await prefs.setString('userId', json['_id'] ?? user.uid);
+
+          // ✅ Save user stats
+          final stat = json['stat'];
+          if (stat != null) {
+            await prefs.setInt(
+              'totalCommentGiven',
+              stat['totalCommentGiven'] ?? 0,
+            );
+            await prefs.setInt(
+              'totalCommentReceived',
+              stat['totalCommentReceived'] ?? 0,
+            );
+            await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
+            await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
+            await prefs.setInt(
+              'totalLikeReceived',
+              stat['totalLikeReceived'] ?? 0,
+            );
+            await prefs.setInt(
+              'totalThreadPosted',
+              stat['totalThreadPosted'] ?? 0,
+            );
+            await prefs.setInt(
+              'totalViewReceived',
+              stat['totalViewReceived'] ?? 0,
+            );
+            await prefs.setString(
+              'tieredProgression',
+              stat['tieredProgression'] ?? "New user",
+            );
+          }
 
           _showSnackBar(context, "Apple sign-in successful!");
 
-          // ✅ Send FCM token with JWT after login
+          // ✅ FCM token upload
           final fcmToken = await FirebaseMessaging.instance.getToken();
           final savedFcmToken = prefs.getString('fcm_token');
           final jwt = prefs.getString('token');
@@ -227,13 +330,13 @@ class OnboardingScreen extends StatelessWidget {
             }
           }
 
-          // ✅ Navigate to main screen
+          // ✅ Navigate to home
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const BottomNavScreen()),
           );
         } else {
-          _showSnackBar(context, "Backend Auth Failed");
+          _showSnackBar(context, json['message'] ?? "Backend Auth Failed");
         }
       } else {
         _showSnackBar(context, "Server error during Apple Sign-In");
