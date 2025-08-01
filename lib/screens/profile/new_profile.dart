@@ -221,22 +221,29 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   Widget _buildTabs(ThemeData theme) {
-    List<String> tabs = ["Threads", "Comments", "Likes", "Badges"];
+    List<String> tabs = [
+      "Threads",
+      "Comments",
+      "Likes",
+      "Followers",
+      "Following",
+      "Badges",
+    ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children:
-            tabs
-                .map(
-                  (tab) => Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: _tabItem(tab),
-                    ),
-                  ),
-                )
-                .toList(),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(tabs.length, (index) {
+            return Row(
+              children: [
+                _tabItem(tabs[index]),
+                if (index != tabs.length - 1) const SizedBox(width: 8),
+              ],
+            );
+          }),
+        ),
       ),
     );
   }
@@ -250,7 +257,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       onTap: () => setState(() => _selectedTab = title),
       child: Container(
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(4),
           color: isSelected ? const Color(0xFFEBB411) : Colors.transparent,
@@ -281,19 +288,19 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       leading: const Icon(Icons.forum, color: Color(0xFFEBB411)),
       title: Text(
         title,
-        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
       ),
       subtitle: Row(
         children: [
           Text(
             "by $author",
-            style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(width: 8),
           const Icon(Icons.access_time, size: 14, color: Colors.grey),
           Text(
             " 4 hours ago",
-            style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
           ),
         ],
       ),
