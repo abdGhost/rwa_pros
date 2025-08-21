@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class NewProfileScreen extends StatefulWidget {
   const NewProfileScreen({super.key});
@@ -11,9 +12,25 @@ class NewProfileScreen extends StatefulWidget {
 
 class _NewProfileScreenState extends State<NewProfileScreen> {
   String _selectedTab = "Threads";
-  final String userName = "John Doe";
-  final String? profileImageUrl = null;
 
+  // ====== State from SharedPreferences (with sensible defaults) ======
+  String? _userName; // name
+  String? _userId;
+  String? _profileImageUrl; // profileImage
+  String? _bannerImageUrl; // bannerImage
+  String? _description; // description
+  String? _createdAt; // createdAt (ISO)
+  String? _tier; // tieredProgression
+
+  int _totalFollower = 0;
+  int _totalFollowing = 0;
+  int _totalCommentGiven = 0;
+  int _totalCommentReceived = 0;
+  int _totalLikeReceived = 0;
+  int _totalThreadPosted = 0;
+  int _totalViewReceived = 0;
+
+  // Demo content (kept as-is)
   final List<Map<String, String>> threads = [
     {"title": "RWAs You Personally Hold?", "author": "Michael"},
     {"title": "Which Blockchain Will Win the RWA Race?", "author": "Michael"},
@@ -38,10 +55,105 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   final List<String> badges = ["Explorer", "Contributor", "Veteran", "Pro"];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadFromPrefs();
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Read values saved during login flows
+    final loadedUserId = prefs.getString('userId');
+    final loadedName = prefs.getString('name');
+    final loadedProfileImg = prefs.getString('profileImage');
+    final loadedBannerImg = prefs.getString('bannerImage');
+    final loadedDescription = prefs.getString('description');
+    final loadedCreatedAt = prefs.getString('createdAt');
+    final loadedTier = prefs.getString('tieredProgression');
+
+    final loadedFollower = prefs.getInt('totalFollower') ?? 0;
+    final loadedFollowing = prefs.getInt('totalFollowing') ?? 0;
+    final loadedCommentGiven = prefs.getInt('totalCommentGiven') ?? 0;
+    final loadedCommentReceived = prefs.getInt('totalCommentReceived') ?? 0;
+    final loadedLikeReceived = prefs.getInt('totalLikeReceived') ?? 0;
+    final loadedThreadPosted = prefs.getInt('totalThreadPosted') ?? 0;
+    final loadedViewReceived = prefs.getInt('totalViewReceived') ?? 0;
+
+    // Assign to state
+    setState(() {
+      _userId = loadedUserId ?? ""; // ✅ now included
+      _userName =
+          (loadedName == null || loadedName.isEmpty) ? "John Doe" : loadedName;
+      _profileImageUrl = loadedProfileImg ?? "";
+      _bannerImageUrl = loadedBannerImg ?? "";
+      _description =
+          (loadedDescription == null || loadedDescription.isEmpty)
+              ? "Condo is the first RWA-focused memetoken powered by a fully transparent on-chain treasury. Combining community culture with real-world assets, Condo bridges meme energy and institutional-grade RWA investments, offering both fun and real value."
+              : loadedDescription;
+      _createdAt = loadedCreatedAt ?? "";
+      _tier = loadedTier ?? "New User";
+
+      _totalFollower = loadedFollower;
+      _totalFollowing = loadedFollowing;
+      _totalCommentGiven = loadedCommentGiven;
+      _totalCommentReceived = loadedCommentReceived;
+      _totalLikeReceived = loadedLikeReceived;
+      _totalThreadPosted = loadedThreadPosted;
+      _totalViewReceived = loadedViewReceived;
+    });
+
+    // Debug print (optional)
+    debugPrint("===== 🔐 Stored User Profile (SharedPreferences) =====");
+    debugPrint("User ID: $_userId");
+    debugPrint("Name: $_userName");
+    debugPrint("Profile Image: $_profileImageUrl");
+    debugPrint("Banner Image: $_bannerImageUrl");
+    debugPrint("Tier: $_tier");
+    debugPrint("CreatedAt: $_createdAt");
+    debugPrint("Followers: $_totalFollower | Following: $_totalFollowing");
+    debugPrint(
+      "Comments Given: $_totalCommentGiven | Received: $_totalCommentReceived",
+    );
+    debugPrint(
+      "Likes Received: $_totalLikeReceived | Threads: $_totalThreadPosted | Views: $_totalViewReceived",
+    );
+    debugPrint("======================================================");
+  }
+
   String _getInitials(String name) {
-    final parts = name.trim().split(" ");
+    if (name.trim().isEmpty) return "U";
+    final parts = name.trim().split(RegExp(r"\s+"));
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  String _formatJoinedDate(String? iso) {
+    if (iso == null || iso.isEmpty) return "Joined: Unknown";
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      const months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+      final d = dt.day.toString().padLeft(2, '0');
+      final m = months[dt.month - 1];
+      final y = dt.year.toString();
+      return "Joined: $d $m $y";
+    } catch (_) {
+      return "Joined: Unknown";
+    }
   }
 
   @override
@@ -82,12 +194,20 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
                 children: [
-                  Image.asset(
-                    'assets/airdrop.png',
+                  // Banner
+                  SizedBox(
                     height: 130,
                     width: double.infinity,
-                    fit: BoxFit.cover,
+                    child:
+                        _bannerImageUrl != null && _bannerImageUrl!.isNotEmpty
+                            ? Image.network(_bannerImageUrl!, fit: BoxFit.cover)
+                            : Image.asset(
+                              'assets/airdrop.png',
+                              fit: BoxFit.cover,
+                            ),
                   ),
+
+                  // Avatar
                   Positioned(
                     bottom: -40,
                     child: Container(
@@ -95,7 +215,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: isDark ? Colors.black : Colors.white,
-                        boxShadow: [
+                        boxShadow: const [
                           BoxShadow(
                             color: Colors.black12,
                             blurRadius: 6,
@@ -107,15 +227,15 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         radius: 45,
                         backgroundColor: Colors.grey.shade300,
                         backgroundImage:
-                            profileImageUrl != null &&
-                                    profileImageUrl!.isNotEmpty
-                                ? NetworkImage(profileImageUrl!)
+                            _profileImageUrl != null &&
+                                    _profileImageUrl!.isNotEmpty
+                                ? NetworkImage(_profileImageUrl!)
                                 : null,
                         child:
-                            (profileImageUrl == null ||
-                                    profileImageUrl!.isEmpty)
+                            (_profileImageUrl == null ||
+                                    _profileImageUrl!.isEmpty)
                                 ? Text(
-                                  _getInitials(userName),
+                                  _getInitials(_userName ?? "John Doe"),
                                   style: GoogleFonts.inter(
                                     fontSize: 28,
                                     fontWeight: FontWeight.bold,
@@ -131,16 +251,30 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             ),
             const SizedBox(height: 10),
 
+            // Name
             Text(
-              userName,
+              _userName ?? "John Doe",
               style: GoogleFonts.inter(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.textTheme.bodyLarge?.color,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
+            // Tier (small text)
+            Text(
+              _tier ?? "New User",
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Badges row (kept as-is)
             Wrap(
               spacing: 8,
               alignment: WrapAlignment.center,
@@ -148,24 +282,45 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             ),
 
             const SizedBox(height: 10),
+
+            // Joined date
             Text(
-              "Joined: 14 March 2025",
+              _formatJoinedDate(_createdAt),
               style: GoogleFonts.inter(
                 fontSize: 12,
                 color: isDark ? Colors.grey.shade400 : Colors.grey,
               ),
             ),
+
             const SizedBox(height: 12),
 
+            // Description
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                "Condo is the first RWA-focused memetoken powered by a fully transparent on-chain treasury. Combining community culture with real-world assets, Condo bridges meme energy and institutional-grade RWA investments, offering both fun and real value.",
+                (_description == null || _description!.isEmpty)
+                    ? "No bio yet"
+                    : _description!,
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: theme.textTheme.bodyMedium?.color,
                 ),
                 textAlign: TextAlign.center,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Simple stats row (optional, non-intrusive)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _statItem("Followers", _totalFollower),
+                  const SizedBox(width: 22),
+                  _statItem("Following", _totalFollowing),
+                ],
               ),
             ),
 
@@ -192,6 +347,18 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
+  Widget _statItem(String label, int value) {
+    return Column(
+      children: [
+        Text(
+          "$value",
+          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        Text(label, style: GoogleFonts.inter(fontSize: 11, color: Colors.grey)),
+      ],
+    );
+  }
+
   Widget _buildBadge(String label, bool isDark) {
     final Map<String, Color> colorMap = {
       "Explorer": Colors.grey,
@@ -207,7 +374,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       decoration: BoxDecoration(
         color: color,
         border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey),
-        // borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,

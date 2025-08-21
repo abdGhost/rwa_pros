@@ -94,80 +94,122 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiService.signin(
-        email: email,
-        password: password,
-      );
+      final resp = await _apiService.signin(email: email, password: password);
 
-      if (response['status'] == true) {
-        print('---------------------------------------------');
-        print('${response}');
-        final prefs = await SharedPreferences.getInstance();
-
-        // ✅ Save user details
-        await prefs.setString('token', response['token'] ?? "");
-        await prefs.setString('email', response['email'] ?? "");
-        await prefs.setString('name', response['name'] ?? "");
-        await prefs.setString('userId', response['_id'] ?? "");
-        await prefs.setString('loginMethod', 'email');
-
-        // Optional: Default/fallback values if profileImage is not sent
-        await prefs.setString('profileImage', response['profileImg'] ?? "");
-
-        // ✅ Save forum-related stats
-        final stat = response['stat'];
-        if (stat != null) {
-          await prefs.setInt(
-            'totalCommentGiven',
-            stat['totalCommentGiven'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalCommentReceived',
-            stat['totalCommentReceived'] ?? 0,
-          );
-          await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
-          await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
-          await prefs.setInt(
-            'totalLikeReceived',
-            stat['totalLikeReceived'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalThreadPosted',
-            stat['totalThreadPosted'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalViewReceived',
-            stat['totalViewReceived'] ?? 0,
-          );
-          await prefs.setString(
-            'tieredProgression',
-            stat['tieredProgression'] ?? "New user",
-          );
-        }
-
-        // ✅ Send FCM token
-        await sendFcmTokenToBackend(response['token']);
-
-        _showSnackBar("Login successful!");
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const BottomNavScreen()),
-        );
-      } else {
-        _showSnackBar(response['message'] ?? "Login failed");
+      // Basic success + token guard
+      final bool ok =
+          (resp['status'] == true) &&
+          (resp['token'] is String && (resp['token'] as String).isNotEmpty);
+      if (!ok) {
+        _showSnackBar(resp['message'] ?? "Login failed");
+        return;
       }
+
+      // Extract with sensible defaults
+      final token = resp['token'] as String;
+      final userId = (resp['_id'] ?? "") as String;
+      final name = (resp['name'] ?? "") as String;
+      final emailFromApi =
+          (resp['email'] ?? email) as String; // fallback to typed email
+      final profileImg = (resp['profileImg'] ?? "") as String;
+      final bannerImg = (resp['bannerImg'] ?? "") as String;
+      final description = (resp['description'] ?? "") as String;
+      final createdAt = (resp['createdAt'] ?? "") as String;
+
+      // Links array -> JSON string
+      final List<dynamic> links =
+          (resp['link'] is List) ? (resp['link'] as List) : const [];
+      final String linksJson = jsonEncode(links);
+
+      // Stats (safe defaults)
+      final Map<String, dynamic> stat =
+          (resp['stat'] is Map<String, dynamic>)
+              ? resp['stat'] as Map<String, dynamic>
+              : {};
+      final int totalCommentGiven = (stat['totalCommentGiven'] ?? 0) as int;
+      final int totalCommentReceived =
+          (stat['totalCommentReceived'] ?? 0) as int;
+      final int totalFollower = (stat['totalFollower'] ?? 0) as int;
+      final int totalFollowing = (stat['totalFollowing'] ?? 0) as int;
+      final int totalLikeReceived = (stat['totalLikeReceived'] ?? 0) as int;
+      final int totalThreadPosted = (stat['totalThreadPosted'] ?? 0) as int;
+      final int totalViewReceived = (stat['totalViewReceived'] ?? 0) as int;
+      final String tieredProgression =
+          (stat['tieredProgression'] ?? "New user") as String;
+
+      // Also keep a canonical blob for future-proofing
+      final canonicalUserJson = jsonEncode({
+        "id": userId,
+        "name": name,
+        "email": emailFromApi,
+        "profileImg": profileImg,
+        "bannerImg": bannerImg,
+        "description": description,
+        "createdAt": createdAt,
+        "link": links, // keep as array in the blob
+        "stat": {
+          "totalCommentGiven": totalCommentGiven,
+          "totalCommentReceived": totalCommentReceived,
+          "totalFollower": totalFollower,
+          "totalFollowing": totalFollowing,
+          "totalLikeReceived": totalLikeReceived,
+          "totalThreadPosted": totalThreadPosted,
+          "totalViewReceived": totalViewReceived,
+          "tieredProgression": tieredProgression,
+        },
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+
+      // Tokens & identity
+      await prefs.setString('token', token);
+      await prefs.setString('loginMethod', 'email');
+      await prefs.setString('userId', userId);
+      await prefs.setString('name', name);
+      await prefs.setString('email', emailFromApi);
+
+      // Profile
+      await prefs.setString('profileImage', profileImg);
+      await prefs.setString('bannerImage', bannerImg);
+      await prefs.setString('description', description);
+      await prefs.setString('createdAt', createdAt);
+
+      // Links & full user blob
+      await prefs.setString('linksJson', linksJson);
+      await prefs.setString('userJson', canonicalUserJson);
+
+      // Forum stats
+      await prefs.setInt('totalCommentGiven', totalCommentGiven);
+      await prefs.setInt('totalCommentReceived', totalCommentReceived);
+      await prefs.setInt('totalFollower', totalFollower);
+      await prefs.setInt('totalFollowing', totalFollowing);
+      await prefs.setInt('totalLikeReceived', totalLikeReceived);
+      await prefs.setInt('totalThreadPosted', totalThreadPosted);
+      await prefs.setInt('totalViewReceived', totalViewReceived);
+      await prefs.setString('tieredProgression', tieredProgression);
+
+      // Send FCM token with the fresh JWT
+      await sendFcmTokenToBackend(token);
+
+      _showSnackBar("Login successful!");
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const BottomNavScreen()),
+      );
     } catch (e) {
       _showSnackBar("Sign-In failed");
       debugPrint("Email/Password Sign-In Error: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
     try {
       _showSnackBar("Signing in with Google...");
-      await GoogleSignIn().signOut();
+      await GoogleSignIn().signOut(); // force account chooser
 
       final googleSignIn =
           Platform.isIOS
@@ -195,6 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = userCred.user;
       if (user == null) throw Exception("User not found");
 
+      // Payload you send to your backend
       final payload = {
         "userName": user.displayName ?? "No Name",
         "profileImg": user.photoURL ?? "",
@@ -210,62 +253,110 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode(payload),
       );
 
-      final json = jsonDecode(response.body);
-      if (response.statusCode == 200 && json['status'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-
-        // ✅ Basic user info
-        await prefs.setString('token', json['token'] ?? "");
-        await prefs.setString('email', json['email'] ?? "");
-        await prefs.setString(
-          'name',
-          json['name'] ?? payload['userName'] ?? "",
-        );
-        await prefs.setString('profileImage', payload['profileImg'] ?? "");
-        await prefs.setString('userId', json['_id'] ?? user.uid);
-        await prefs.setString('loginMethod', 'google');
-
-        // ✅ Forum stats
-        final stat = json['stat'];
-        if (stat != null) {
-          await prefs.setInt(
-            'totalCommentGiven',
-            stat['totalCommentGiven'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalCommentReceived',
-            stat['totalCommentReceived'] ?? 0,
-          );
-          await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
-          await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
-          await prefs.setInt(
-            'totalLikeReceived',
-            stat['totalLikeReceived'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalThreadPosted',
-            stat['totalThreadPosted'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalViewReceived',
-            stat['totalViewReceived'] ?? 0,
-          );
-          await prefs.setString(
-            'tieredProgression',
-            stat['tieredProgression'] ?? "New user",
-          );
-        }
-
-        await sendFcmTokenToBackend(json['token']); // ✅ FCM
-
-        _showSnackBar("Google sign-in successful!");
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const BottomNavScreen()),
-        );
-      } else {
-        _showSnackBar(json['message'] ?? "Authentication failed");
+      // Parse once
+      Map<String, dynamic> json;
+      try {
+        json = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw Exception("Invalid server response (${response.statusCode})");
       }
+
+      // Basic success guard (API returns { status: true, token, id, ... })
+      final bool ok = response.statusCode == 200 && (json['status'] == true);
+      if (!ok) {
+        _showSnackBar(json['message'] ?? "Authentication failed");
+        return;
+      }
+
+      // Prefer server values over client payload
+      final token = (json['token'] ?? "") as String;
+      final userId =
+          (json['id'] ?? json['_id'] ?? user.uid)
+              as String; // your sample uses "id"
+      final name = (json['name'] ?? payload['userName'] ?? "") as String;
+      final email = (json['email'] ?? payload['email'] ?? "") as String;
+      final profileImg =
+          (json['profileImg'] ?? payload['profileImg'] ?? "") as String;
+      final bannerImg = (json['bannerImg'] ?? "") as String;
+      final description = (json['description'] ?? "") as String;
+      final createdAt = (json['createdAt'] ?? "") as String;
+
+      // Stats (safe defaults)
+      final Map<String, dynamic> stat =
+          (json['stat'] is Map<String, dynamic>)
+              ? json['stat'] as Map<String, dynamic>
+              : const {};
+      final totalCommentGiven = (stat['totalCommentGiven'] ?? 0) as int;
+      final totalCommentReceived = (stat['totalCommentReceived'] ?? 0) as int;
+      final totalFollower = (stat['totalFollower'] ?? 0) as int;
+      final totalFollowing = (stat['totalFollowing'] ?? 0) as int;
+      final totalLikeReceived = (stat['totalLikeReceived'] ?? 0) as int;
+      final totalThreadPosted = (stat['totalThreadPosted'] ?? 0) as int;
+      final totalViewReceived = (stat['totalViewReceived'] ?? 0) as int;
+      final tieredProgression =
+          (stat['tieredProgression'] ?? "New user") as String;
+
+      // Canonical blob for easy hydrate/refresh later
+      final userJson = jsonEncode({
+        "id": userId,
+        "name": name,
+        "email": email,
+        "profileImg": profileImg,
+        "bannerImg": bannerImg,
+        "description": description,
+        "createdAt": createdAt,
+        "stat": {
+          "totalCommentGiven": totalCommentGiven,
+          "totalCommentReceived": totalCommentReceived,
+          "totalFollower": totalFollower,
+          "totalFollowing": totalFollowing,
+          "totalLikeReceived": totalLikeReceived,
+          "totalThreadPosted": totalThreadPosted,
+          "totalViewReceived": totalViewReceived,
+          "tieredProgression": tieredProgression,
+        },
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+
+      // Identity & tokens
+      await prefs.setString('token', token);
+      await prefs.setString('loginMethod', 'google');
+      await prefs.setString('userId', userId);
+      await prefs.setString('name', name);
+      await prefs.setString('email', email);
+
+      // Profile
+      await prefs.setString('profileImage', profileImg);
+      await prefs.setString('bannerImage', bannerImg);
+      await prefs.setString('description', description);
+      await prefs.setString('createdAt', createdAt);
+
+      // Stats
+      await prefs.setInt('totalCommentGiven', totalCommentGiven);
+      await prefs.setInt('totalCommentReceived', totalCommentReceived);
+      await prefs.setInt('totalFollower', totalFollower);
+      await prefs.setInt('totalFollowing', totalFollowing);
+      await prefs.setInt('totalLikeReceived', totalLikeReceived);
+      await prefs.setInt('totalThreadPosted', totalThreadPosted);
+      await prefs.setInt('totalViewReceived', totalViewReceived);
+      await prefs.setString('tieredProgression', tieredProgression);
+
+      // Canonical user blob
+      await prefs.setString('userJson', userJson);
+
+      // Send FCM with fresh JWT
+      if (token.isNotEmpty) {
+        await sendFcmTokenToBackend(token);
+      }
+
+      _showSnackBar("Google sign-in successful!");
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const BottomNavScreen()),
+      );
     } catch (e) {
       _showSnackBar("Google Sign-In failed");
       debugPrint("Google Sign-In Error: $e");
@@ -276,6 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       _showSnackBar("Signing in with Apple...");
 
+      // 1) Apple → Firebase
       final appleCred = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
@@ -294,13 +386,26 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = userCred.user;
       if (user == null) throw Exception("Apple Sign-In failed");
 
+      // Apple may not provide name/email after first consent
+      final fallbackDisplayName =
+          (appleCred.givenName?.isNotEmpty == true ||
+                  appleCred.familyName?.isNotEmpty == true)
+              ? "${appleCred.givenName ?? ''} ${appleCred.familyName ?? ''}"
+                  .trim()
+              : "Apple User";
+
       final payload = {
-        "userName": user.displayName ?? appleCred.givenName ?? "Apple User",
-        "profileImg": "",
-        "email": user.email ?? "",
+        "userName":
+            user.displayName?.isNotEmpty == true
+                ? user.displayName
+                : fallbackDisplayName,
+        "profileImg":
+            "", // you can’t get avatar from Apple; expect backend to fill
+        "email": user.email ?? "", // may be empty on subsequent sign-ins
         "appleId": user.uid,
       };
 
+      // 2) Hit your backend
       final response = await http.post(
         Uri.parse(
           "https://rwa-f1623a22e3ed.herokuapp.com/api/users/auth/apple",
@@ -309,62 +414,102 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode(payload),
       );
 
-      final json = jsonDecode(response.body);
-      if (response.statusCode == 200 && json['status'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-
-        // ✅ Basic info
-        await prefs.setString('token', json['token'] ?? "");
-        await prefs.setString('email', json['email'] ?? "");
-        await prefs.setString(
-          'name',
-          json['name'] ?? payload['userName'] ?? "",
-        );
-        await prefs.setString('profileImage', "");
-        await prefs.setString('userId', json['_id'] ?? user.uid);
-        await prefs.setString('loginMethod', 'apple');
-
-        // ✅ Forum stats
-        final stat = json['stat'];
-        if (stat != null) {
-          await prefs.setInt(
-            'totalCommentGiven',
-            stat['totalCommentGiven'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalCommentReceived',
-            stat['totalCommentReceived'] ?? 0,
-          );
-          await prefs.setInt('totalFollower', stat['totalFollower'] ?? 0);
-          await prefs.setInt('totalFollowing', stat['totalFollowing'] ?? 0);
-          await prefs.setInt(
-            'totalLikeReceived',
-            stat['totalLikeReceived'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalThreadPosted',
-            stat['totalThreadPosted'] ?? 0,
-          );
-          await prefs.setInt(
-            'totalViewReceived',
-            stat['totalViewReceived'] ?? 0,
-          );
-          await prefs.setString(
-            'tieredProgression',
-            stat['tieredProgression'] ?? "New user",
-          );
-        }
-
-        await sendFcmTokenToBackend(json['token']); // ✅
-
-        _showSnackBar("Apple sign-in successful!");
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const BottomNavScreen()),
-        );
-      } else {
-        _showSnackBar(json['message'] ?? "Authentication failed");
+      Map<String, dynamic> json;
+      try {
+        json = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw Exception("Invalid server response (${response.statusCode})");
       }
+
+      final ok = response.statusCode == 200 && (json['status'] == true);
+      if (!ok) {
+        _showSnackBar(json['message'] ?? "Authentication failed");
+        return;
+      }
+
+      // 3) Prefer server values
+      final token = (json['token'] ?? "") as String;
+      final userId = (json['id'] ?? json['_id'] ?? user.uid) as String;
+      final name =
+          (json['name'] ?? payload['userName'] ?? "Apple User") as String;
+      final email = (json['email'] ?? payload['email'] ?? "") as String;
+      final profileImg =
+          (json['profileImg'] ?? "") as String; // backend may set one
+      final bannerImg = (json['bannerImg'] ?? "") as String;
+      final description = (json['description'] ?? "") as String;
+      final createdAt = (json['createdAt'] ?? "") as String;
+
+      // Stats
+      final Map<String, dynamic> stat =
+          (json['stat'] is Map<String, dynamic>)
+              ? json['stat'] as Map<String, dynamic>
+              : const {};
+      final totalCommentGiven = (stat['totalCommentGiven'] ?? 0) as int;
+      final totalCommentReceived = (stat['totalCommentReceived'] ?? 0) as int;
+      final totalFollower = (stat['totalFollower'] ?? 0) as int;
+      final totalFollowing = (stat['totalFollowing'] ?? 0) as int;
+      final totalLikeReceived = (stat['totalLikeReceived'] ?? 0) as int;
+      final totalThreadPosted = (stat['totalThreadPosted'] ?? 0) as int;
+      final totalViewReceived = (stat['totalViewReceived'] ?? 0) as int;
+      final tieredProgression =
+          (stat['tieredProgression'] ?? "New user") as String;
+
+      // Canonical blob
+      final userJson = jsonEncode({
+        "id": userId,
+        "name": name,
+        "email": email,
+        "profileImg": profileImg,
+        "bannerImg": bannerImg,
+        "description": description,
+        "createdAt": createdAt,
+        "stat": {
+          "totalCommentGiven": totalCommentGiven,
+          "totalCommentReceived": totalCommentReceived,
+          "totalFollower": totalFollower,
+          "totalFollowing": totalFollowing,
+          "totalLikeReceived": totalLikeReceived,
+          "totalThreadPosted": totalThreadPosted,
+          "totalViewReceived": totalViewReceived,
+          "tieredProgression": tieredProgression,
+        },
+      });
+
+      // 4) Persist
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', token);
+      await prefs.setString('loginMethod', 'apple');
+      await prefs.setString('userId', userId);
+      await prefs.setString('name', name);
+      await prefs.setString('email', email);
+
+      await prefs.setString('profileImage', profileImg);
+      await prefs.setString('bannerImage', bannerImg);
+      await prefs.setString('description', description);
+      await prefs.setString('createdAt', createdAt);
+
+      await prefs.setInt('totalCommentGiven', totalCommentGiven);
+      await prefs.setInt('totalCommentReceived', totalCommentReceived);
+      await prefs.setInt('totalFollower', totalFollower);
+      await prefs.setInt('totalFollowing', totalFollowing);
+      await prefs.setInt('totalLikeReceived', totalLikeReceived);
+      await prefs.setInt('totalThreadPosted', totalThreadPosted);
+      await prefs.setInt('totalViewReceived', totalViewReceived);
+      await prefs.setString('tieredProgression', tieredProgression);
+
+      await prefs.setString('userJson', userJson);
+
+      // 5) FCM with fresh JWT
+      if (token.isNotEmpty) {
+        await sendFcmTokenToBackend(token);
+      }
+
+      _showSnackBar("Apple sign-in successful!");
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const BottomNavScreen()),
+      );
     } catch (e) {
       _showSnackBar("Apple Sign-In failed");
       debugPrint("Apple Sign-In Error: $e");
