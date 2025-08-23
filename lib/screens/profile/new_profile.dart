@@ -1375,6 +1375,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   // ---------- Likes section (liked forums) ----------
+  // ---------- Likes section (liked forums) ----------
   Widget _buildLikesSection() {
     if (_isLikesLoading) {
       return const Padding(
@@ -1405,32 +1406,121 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       children:
           _likedForums.map((l) {
             final forum = l["forumId"] as Map<String, dynamic>?;
-            final title = forum?["title"]?.toString() ?? "";
-            final author = forum?["userId"]?["userName"]?.toString() ?? "";
-            final t = title.isNotEmpty ? title : "(untitled)";
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 4,
-              ),
-              leading: const Icon(Icons.thumb_up, color: Colors.green),
-              title: Text('Liked "$t"', style: GoogleFonts.inter(fontSize: 14)),
-              subtitle:
-                  author.isEmpty
-                      ? null
-                      : Text(
-                        'by $author',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.grey,
+            final title = (forum?["title"] ?? "").toString().trim();
+            final fallbackTitle = _extractTextFromHtml(forum?["text"] ?? "");
+            final forumTitle =
+                title.isNotEmpty
+                    ? title
+                    : (fallbackTitle.isNotEmpty ? fallbackTitle : "(untitled)");
+            final author = (forum?["userId"]?["userName"] ?? "").toString();
+            final createdAt =
+                (l["createdAt"] ?? forum?["createdAt"] ?? "").toString();
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Card(
+                elevation: 0,
+                color: Theme.of(context).cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: Colors.grey.shade300, width: .2),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    // TODO: Navigate to ForumThreadScreen with forum['_id']
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header: liked + time
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.thumb_up_alt_outlined,
+                              size: 16,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                forumTitle,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.access_time,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              _formatAgo(createdAt),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-              onTap: () {
-                // TODO: Navigate to ForumThreadScreen with forum['_id']
-              },
+                        const SizedBox(height: 6),
+                        if (author.isNotEmpty)
+                          Text(
+                            "by $author",
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             );
           }).toList(),
     );
+  }
+
+  bool _isFollowingUser(String userId) {
+    // consider them "following" if they appear in current _followings
+    return _followings.any((it) => _pickUserFromItem(it)["id"] == userId);
+  }
+
+  Future<void> _toggleFollowUserInline(String userId) async {
+    final currentlyFollowing = _isFollowingUser(userId);
+    if (currentlyFollowing) {
+      await _unfollowUser(userId);
+    } else {
+      await _followUser(userId);
+    }
+    // refresh both lists to keep badges & buttons in sync
+    final targetUserId =
+        (widget.viewedUserId?.isNotEmpty ?? false)
+            ? widget.viewedUserId!
+            : (_userId ?? "");
+    await Future.wait([
+      _fetchFollowers(
+        targetUserId,
+        page: _followersPage,
+        size: _followersSize,
+        filter: _followersFilter,
+      ),
+      _fetchFollowings(
+        targetUserId,
+        page: _followingsPage,
+        size: _followingsSize,
+        filter: _followingsFilter,
+      ),
+    ]);
   }
 
   // ---------- Followers section ----------
