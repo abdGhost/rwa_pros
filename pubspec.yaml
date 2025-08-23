@@ -67,6 +67,7 @@ dependencies:
   flutter_quill: ^11.4.1
   carousel_slider: ^5.1.1
   font_awesome_flutter: ^10.9.1
+  image_picker: ^1.2.0
 
 flutter_launcher_icons:
   android: true

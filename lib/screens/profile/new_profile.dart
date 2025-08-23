@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rwa_app/screens/edit_profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -665,9 +666,29 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
-  void _onEditProfile() {
-    // TODO: Navigate to your edit profile screen
-    debugPrint("📝 Edit profile tapped");
+  void _onEditProfile() async {
+    // Pass current values for convenience (from "me")
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => EditProfileScreen(
+              initialName: _userName ?? '',
+              initialEmail: '', // put your stored email if you cache it
+              initialProfileImgUrl: _profileImageUrl ?? '',
+              initialBannerImgUrl: _bannerImageUrl ?? '',
+              initialLinks:
+                  _isMe ? [] : [], // if you cache self links, pass them
+            ),
+      ),
+    );
+
+    // If saved, refresh local data and (optionally) server detail
+    if (result == true) {
+      await _loadFromPrefs(); // refresh from SharedPreferences
+      // If you also have a self-detail endpoint, you can call it here
+      setState(() {}); // rebuild
+    }
   }
 
   String _getInitials(String name) {
