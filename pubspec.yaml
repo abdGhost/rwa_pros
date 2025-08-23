@@ -66,6 +66,7 @@ dependencies:
   readmore: ^3.0.0
   flutter_quill: ^11.4.1
   carousel_slider: ^5.1.1
+  font_awesome_flutter: ^10.9.1
 
 flutter_launcher_icons:
   android: true

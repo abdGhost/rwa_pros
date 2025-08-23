@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 class NewProfileScreen extends StatefulWidget {
   /// If null or equal to the logged-in user's id (from SharedPreferences),
@@ -25,14 +27,14 @@ class NewProfileScreen extends StatefulWidget {
 class _NewProfileScreenState extends State<NewProfileScreen> {
   String _selectedTab = "Threads";
 
-  // ====== State from SharedPreferences (with sensible defaults) ======
-  String? _userName; // name (of logged-in user profile data stored in prefs)
-  String? _userId; // logged-in user id
-  String? _profileImageUrl; // profileImage
-  String? _bannerImageUrl; // bannerImage
-  String? _description; // description
-  String? _createdAt; // createdAt (ISO)
-  String? _tier; // tieredProgression
+  // ====== LOGGED-IN (from SharedPreferences) ======
+  String? _userName; // me
+  String? _userId; // me
+  String? _profileImageUrl; // me
+  String? _bannerImageUrl; // me
+  String? _description; // me
+  String? _createdAt; // me
+  String? _tier; // me
 
   int _totalFollower = 0;
   int _totalFollowing = 0;
@@ -42,13 +44,32 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   int _totalThreadPosted = 0;
   int _totalViewReceived = 0;
 
-  // Follow state for "viewing someone else"
+  // ====== VIEWED PROFILE (from /users/detail/{id}) ======
+  bool _isViewedLoading = false;
+  String? _viewedError;
+
+  String? _vpName;
+  String? _vpProfileImg;
+  String? _vpBannerImg;
+  String? _vpDescription;
+  String? _vpCreatedAt;
+  String? _vpTier; // from stat.tieredProgression
+  List<Map<String, String>> _vpLinks = []; // [{platform,url}]
+
+  int _vpFollower = 0;
+  int _vpFollowing = 0;
+  int _vpCommentGiven = 0;
+  int _vpCommentReceived = 0;
+  int _vpLikeReceived = 0;
+  int _vpThreadPosted = 0;
+  int _vpViewReceived = 0;
+
+  // Follow state when viewing someone else
   bool _isFollowing = false;
 
-  // ====== Badges for viewed profile (not me) ======
+  // ====== Badges for viewed profile ======
   bool _isBadgesLoading = false;
   String? _badgesError;
-  // categories → list of badges
   final Map<String, List<String>> _viewedBadges = {
     "Tier": [],
     "Reputation": [],
@@ -58,13 +79,12 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     "VIP": [],
   };
 
-  // Demo content (kept as-is for preview)
+  // Demo content (keep your preview lists)
   final List<Map<String, String>> threads = [
     {"title": "RWAs You Personally Hold?", "author": "Michael"},
     {"title": "Which Blockchain Will Win the RWA Race?", "author": "Michael"},
     {"title": "Beginner’s Guide: Explain RWAs Like I’m 5", "author": "Michael"},
   ];
-
   final List<Map<String, String>> comments = [
     {
       "comment": "This guide helped me understand RWAs, thank you!",
@@ -75,7 +95,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       "thread": "Which Blockchain Will Win?",
     },
   ];
-
   final List<Map<String, String>> likes = [
     {"liked": "RWAs You Personally Hold?"},
     {"liked": "Explain RWAs Like I’m 5"},
@@ -89,10 +108,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   Future<void> _loadFromPrefs() async {
-    print('IDDDDDDDDDDDDDDDD ${widget.viewedUserId}');
+    debugPrint('🔎 viewedUserId → ${widget.viewedUserId}');
     final prefs = await SharedPreferences.getInstance();
 
-    // Read values saved during login flows (for the LOGGED-IN user)
+    // Logged-in values
     final loadedUserId = prefs.getString('userId');
     final loadedName = prefs.getString('name');
     final loadedProfileImg = prefs.getString('profileImage');
@@ -131,9 +150,12 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       _totalViewReceived = loadedViewReceived;
     });
 
-    // If we're viewing someone else's profile, fetch their badges
+    // If viewing someone else, fetch their details + badges
     if (!_isMe && (widget.viewedUserId ?? "").isNotEmpty) {
-      await _fetchViewedUserBadges(widget.viewedUserId!);
+      await Future.wait([
+        _fetchViewedUserDetail(widget.viewedUserId!),
+        _fetchViewedUserBadges(widget.viewedUserId!),
+      ]);
     }
 
     // Debug (optional)
@@ -151,7 +173,81 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     return viewedId == (_userId ?? "");
   }
 
-  // -------- Fetch badges for viewed user (not me) ----------
+  // -------- Fetch full detail for viewed user ----------
+  Future<void> _fetchViewedUserDetail(String userId) async {
+    setState(() {
+      _isViewedLoading = true;
+      _viewedError = null;
+      _vpLinks = [];
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jwt = prefs.getString('token'); // optional
+
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId",
+      );
+
+      final res = await http.get(
+        uri,
+        headers: {
+          "Content-Type": "application/json",
+          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
+        },
+      );
+
+      if (res.statusCode != 200) {
+        throw Exception("HTTP ${res.statusCode}: ${res.body}");
+      }
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data["status"] != true ||
+          data["userDetail"] == null ||
+          data["stat"] == null) {
+        throw Exception("Invalid payload");
+      }
+
+      final detail = (data["userDetail"] as Map<String, dynamic>);
+      final stat = (data["stat"] as Map<String, dynamic>);
+
+      // detail
+      _vpName = (detail["userName"] ?? "").toString();
+      _vpProfileImg = (detail["profileImg"] ?? "").toString();
+      _vpBannerImg = (detail["bannerImg"] ?? "").toString();
+      _vpDescription = (detail["description"] ?? "").toString();
+      _vpCreatedAt = (detail["createdAt"] ?? "").toString();
+
+      final linksDyn = (detail["link"] as List?) ?? [];
+      _vpLinks =
+          linksDyn
+              .map<Map<String, String>>(
+                (e) => {
+                  "platform": (e["platform"] ?? "").toString(),
+                  "url": (e["url"] ?? "").toString(),
+                },
+              )
+              .where((m) => m["platform"]!.isNotEmpty && m["url"]!.isNotEmpty)
+              .toList();
+
+      // stat
+      _vpFollower = (stat["totalFollower"] ?? 0) as int;
+      _vpFollowing = (stat["totalFollowing"] ?? 0) as int;
+      _vpCommentGiven = (stat["totalCommentGiven"] ?? 0) as int;
+      _vpCommentReceived = (stat["totalCommentReceived"] ?? 0) as int;
+      _vpLikeReceived = (stat["totalLikeReceived"] ?? 0) as int;
+      _vpThreadPosted = (stat["totalThreadPosted"] ?? 0) as int;
+      _vpViewReceived = (stat["totalViewReceived"] ?? 0) as int;
+      _vpTier = (stat["tieredProgression"] ?? "").toString();
+    } catch (e) {
+      _viewedError = "Failed to load profile";
+      debugPrint("❌ Viewed profile error: $e");
+    } finally {
+      if (mounted) setState(() => _isViewedLoading = false);
+    }
+  }
+
+  // -------- Fetch badges for viewed user ----------
   Future<void> _fetchViewedUserBadges(String userId) async {
     setState(() {
       _isBadgesLoading = true;
@@ -281,16 +377,37 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Tabs with counts in labels (from prefs — i.e., your own stats)
+    final bool useViewed = !_isMe;
+
+    // Top fields
+    final displayName =
+        useViewed ? (_vpName ?? "User") : (_userName ?? "John Doe");
+    final displayProfileImg =
+        useViewed ? (_vpProfileImg ?? "") : (_profileImageUrl ?? "");
+    final displayBannerImg =
+        useViewed ? (_vpBannerImg ?? "") : (_bannerImageUrl ?? "");
+    final displayDesc =
+        useViewed ? (_vpDescription ?? "") : (_description ?? "");
+    final displayCreatedAt =
+        useViewed ? (_vpCreatedAt ?? "") : (_createdAt ?? "");
+    final displayTier = useViewed ? (_vpTier ?? "") : (_tier ?? "");
+
+    // Stats for tabs
+    final tThreads = useViewed ? _vpThreadPosted : _totalThreadPosted;
+    final tComments = useViewed ? _vpCommentGiven : _totalCommentGiven;
+    final tLikes = useViewed ? _vpLikeReceived : _totalLikeReceived;
+    final tFollowers = useViewed ? _vpFollower : _totalFollower;
+    final tFollowing = useViewed ? _vpFollowing : _totalFollowing;
+
     final List<String> tabs = [
-      "Threads (${_totalThreadPosted})",
-      "Comments (${_totalCommentGiven})",
-      "Likes (${_totalLikeReceived})",
-      "Followers (${_totalFollower})",
-      "Following (${_totalFollowing})",
+      "Threads ($tThreads)",
+      "Comments ($tComments)",
+      "Likes ($tLikes)",
+      "Followers ($tFollowers)",
+      "Following ($tFollowing)",
     ];
 
-    // Normalize selection if label changed due to counts
+    // Normalize selection if a label changed due to counts
     if (!tabs.any((t) => t.startsWith(_selectedTab))) {
       _selectedTab = "Threads";
     }
@@ -342,164 +459,185 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Banner & Profile Image
-            Container(
-              margin: const EdgeInsets.only(bottom: 40),
-              child: Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                children: [
-                  // Banner
-                  SizedBox(
-                    height: 130,
-                    width: double.infinity,
-                    child:
-                        (_bannerImageUrl != null && _bannerImageUrl!.isNotEmpty)
-                            ? Image.network(_bannerImageUrl!, fit: BoxFit.cover)
-                            : Image.asset(
-                              'assets/airdrop.png',
-                              fit: BoxFit.cover,
+      body:
+          useViewed && _isViewedLoading
+              ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 24.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+              : SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // Banner & Avatar
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 40),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          SizedBox(
+                            height: 130,
+                            width: double.infinity,
+                            child:
+                                (displayBannerImg.isNotEmpty)
+                                    ? Image.network(
+                                      displayBannerImg,
+                                      fit: BoxFit.cover,
+                                    )
+                                    : Image.asset(
+                                      'assets/airdrop.png',
+                                      fit: BoxFit.cover,
+                                    ),
+                          ),
+                          Positioned(
+                            bottom: -40,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark ? Colors.black : Colors.white,
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 6,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: CircleAvatar(
+                                radius: 45,
+                                backgroundColor: Colors.grey.shade300,
+                                backgroundImage:
+                                    (displayProfileImg.isNotEmpty)
+                                        ? NetworkImage(displayProfileImg)
+                                        : null,
+                                child:
+                                    (displayProfileImg.isEmpty)
+                                        ? Text(
+                                          _getInitials(displayName),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black,
+                                          ),
+                                        )
+                                        : null,
+                              ),
                             ),
-                  ),
-
-                  // Avatar
-                  Positioned(
-                    bottom: -40,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isDark ? Colors.black : Colors.white,
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 6,
-                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: CircleAvatar(
-                        radius: 45,
-                        backgroundColor: Colors.grey.shade300,
-                        backgroundImage:
-                            (_profileImageUrl != null &&
-                                    _profileImageUrl!.isNotEmpty)
-                                ? NetworkImage(_profileImageUrl!)
-                                : null,
-                        child:
-                            (_profileImageUrl == null ||
-                                    _profileImageUrl!.isEmpty)
-                                ? Text(
-                                  _getInitials(_userName ?? "John Doe"),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
-                                  ),
-                                )
-                                : null,
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Name
+                    Text(
+                      displayName,
+                      style: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
+                    const SizedBox(height: 6),
 
-            // Name
-            Text(
-              _userName ?? "John Doe",
-              style: GoogleFonts.inter(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-            ),
-            const SizedBox(height: 6),
+                    // Tier
+                    if ((displayTier).isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: _buildTierChip(displayTier, isDark),
+                      ),
 
-            // Tier (single chip for ME; for others, badges section will show Tier too)
-            if (_isMe && (_tier ?? "").isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: _buildTierChip(_tier!, isDark),
-              ),
+                    const SizedBox(height: 10),
 
-            const SizedBox(height: 10),
+                    // Joined date
+                    Text(
+                      _formatJoinedDate(displayCreatedAt),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey,
+                      ),
+                    ),
 
-            // Joined date
-            Text(
-              _formatJoinedDate(_createdAt),
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: isDark ? Colors.grey.shade400 : Colors.grey,
-              ),
-            ),
+                    const SizedBox(height: 12),
 
-            const SizedBox(height: 12),
+                    // Description
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        displayDesc.isEmpty ? "No bio yet" : displayDesc,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
 
-            // Description
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                (_description == null || _description!.isEmpty)
-                    ? "No bio yet"
-                    : _description!,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: theme.textTheme.bodyMedium?.color,
+                    // Social Links (only when viewing others & links exist)
+                    if (!_isMe && _vpLinks.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildLinksRow(_vpLinks, Theme.of(context)),
+                    ],
+
+                    // // Badges (viewing others)
+                    // if (!_isMe) _buildBadgesSection(Theme.of(context)),
+                    const SizedBox(height: 16),
+                    _buildTabs(Theme.of(context), tabs),
+                    const SizedBox(height: 8),
+
+                    // Tab content (demo)
+                    if (_selectedTab == "Threads")
+                      ...threads.map(
+                        (t) => _buildThreadCard(t['title']!, t['author']!),
+                      ),
+                    if (_selectedTab == "Comments")
+                      ...comments.map(
+                        (c) => _buildCommentCard(c['comment']!, c['thread']!),
+                      ),
+                    if (_selectedTab == "Likes")
+                      ...likes.map((l) => _buildLikeCard(l['liked']!)),
+                    if (_selectedTab == "Followers")
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          "Followers: ${useViewed ? _vpFollower : _totalFollower}",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    if (_selectedTab == "Following")
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          "Following: ${useViewed ? _vpFollowing : _totalFollowing}",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+
+                    if (useViewed && _viewedError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          _viewedError!,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
-            ),
-
-            // ====== Badges section (only when viewing others, if data exists) ======
-            if (!_isMe) _buildBadgesSection(theme),
-
-            const SizedBox(height: 16),
-            _buildTabs(theme, tabs),
-            const SizedBox(height: 8),
-
-            // Content per tab (demo lists for now)
-            if (_selectedTab == "Threads")
-              ...threads.map(
-                (t) => _buildThreadCard(t['title']!, t['author']!),
-              ),
-            if (_selectedTab == "Comments")
-              ...comments.map(
-                (c) => _buildCommentCard(c['comment']!, c['thread']!),
-              ),
-            if (_selectedTab == "Likes")
-              ...likes.map((l) => _buildLikeCard(l['liked']!)),
-            if (_selectedTab == "Followers")
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  "Followers: $_totalFollower",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            if (_selectedTab == "Following")
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  "Following: $_totalFollowing",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
     );
   }
 
@@ -516,7 +654,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(width: 8),
-              SizedBox(
+              const SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
@@ -738,5 +876,133 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         style: GoogleFonts.inter(fontSize: 14),
       ),
     );
+  }
+
+  // ---------- Social links row ----------
+  // Widget _buildLinksRow(List<Map<String, String>> links, ThemeData theme) {
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(horizontal: 16),
+  //     child: Wrap(
+  //       spacing: 8,
+  //       runSpacing: 8,
+  //       children:
+  //           links.map((m) {
+  //             final platform = m["platform"]!;
+  //             String url = m["url"]!;
+  //             // prepend scheme if missing
+  //             if (!url.startsWith("http://") && !url.startsWith("https://")) {
+  //               url = "https://$url";
+  //             }
+  //             final icon = _iconForPlatform(platform);
+  //             return InkWell(
+  //               onTap: () async {
+  //                 final uri = Uri.parse(url);
+  //                 if (await canLaunchUrl(uri)) {
+  //                   await launchUrl(uri, mode: LaunchMode.externalApplication);
+  //                 } else {
+  //                   ScaffoldMessenger.of(
+  //                     context,
+  //                   ).showSnackBar(SnackBar(content: Text("Cannot open $url")));
+  //                 }
+  //               },
+  //               child: Container(
+  //                 padding: const EdgeInsets.symmetric(
+  //                   horizontal: 10,
+  //                   vertical: 6,
+  //                 ),
+  //                 decoration: BoxDecoration(
+  //                   color:
+  //                       theme.brightness == Brightness.dark
+  //                           ? Colors.grey.shade800
+  //                           : Colors.grey.shade200,
+  //                   borderRadius: BorderRadius.circular(6),
+  //                   border: Border.all(
+  //                     color:
+  //                         theme.brightness == Brightness.dark
+  //                             ? Colors.grey.shade700
+  //                             : Colors.grey.shade300,
+  //                   ),
+  //                 ),
+  //                 child: Row(
+  //                   mainAxisSize: MainAxisSize.min,
+  //                   children: [
+  //                     Icon(icon, size: 14),
+  //                     const SizedBox(width: 6),
+  //                     Text(
+  //                       platform,
+  //                       style: GoogleFonts.inter(
+  //                         fontSize: 12,
+  //                         fontWeight: FontWeight.w600,
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ),
+  //             );
+  //           }).toList(),
+  //     ),
+  //   );
+  // }
+
+  Widget _buildLinksRow(List<Map<String, String>> links, ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Wrap(
+        spacing: 12,
+        children:
+            links.map((m) {
+              final platform = m["platform"]!;
+              String url = m["url"]!;
+              // prepend scheme if missing
+              if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "https://$url";
+              }
+              final icon = _iconForPlatform(platform);
+
+              return InkWell(
+                onTap: () async {
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text("Cannot open $url")));
+                  }
+                },
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor:
+                      isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
+
+  IconData _iconForPlatform(String p) {
+    switch (p.toLowerCase()) {
+      case "twitter":
+      case "x":
+        return FontAwesomeIcons.xTwitter; // better icon for X/Twitter
+      case "telegram":
+        return FontAwesomeIcons.telegram;
+      case "linkedin":
+        return FontAwesomeIcons.linkedin;
+      case "youtube":
+        return FontAwesomeIcons.youtube;
+      case "medium":
+        return FontAwesomeIcons.medium;
+      default:
+        return FontAwesomeIcons.link;
+    }
   }
 }
