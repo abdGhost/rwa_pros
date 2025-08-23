@@ -764,16 +764,45 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   void _onEditProfile() async {
+    // Prefer API values; fall back to prefs where needed
+    final prefs = await SharedPreferences.getInstance();
+
+    // Name
+    final initialName =
+        _isMe ? (_userName ?? prefs.getString('name') ?? '') : (_vpName ?? '');
+
+    // Email
+    final initialEmail =
+        _isMe
+            ? (prefs.getString('email') ?? '') // you keep email in prefs
+            : ''; // viewing others: leave disabled/blank if you don't expose their email
+
+    // Images
+    final initialProfileImg =
+        _isMe
+            ? (_profileImageUrl ?? prefs.getString('profileImage') ?? '')
+            : (_vpProfileImg ?? '');
+    final initialBannerImg =
+        _isMe
+            ? (_bannerImageUrl ?? prefs.getString('bannerImage') ?? '')
+            : (_vpBannerImg ?? '');
+
+    // LINKS — THIS WAS THE MISSING PIECE
+    final List<Map<String, String>> initialLinks =
+        _isMe
+            ? (_myLinks) // from _fetchMyLinksAndTier
+            : (_vpLinks); // from _fetchViewedUserDetail
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
             (_) => EditProfileScreen(
-              initialName: _userName ?? '',
-              initialEmail: '',
-              initialProfileImgUrl: _profileImageUrl ?? '',
-              initialBannerImgUrl: _bannerImageUrl ?? '',
-              initialLinks: _isMe ? [] : [],
+              initialName: initialName,
+              initialEmail: initialEmail,
+              initialProfileImgUrl: initialProfileImg,
+              initialBannerImgUrl: initialBannerImg,
+              initialLinks: initialLinks, // ✅ pass real links, not []
             ),
       ),
     );
