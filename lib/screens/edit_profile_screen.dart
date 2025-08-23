@@ -823,11 +823,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _linksBlock(ThemeData theme) {
+    final textColor = theme.colorScheme.onSurface;
+    final hintColor = theme.hintColor; // usually grey-ish and theme-aware
+    final borderColor = theme.dividerColor;
+
+    InputDecoration _fieldDec({required String label, String? hint}) {
+      return InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
+        labelText: label,
+        labelStyle: TextStyle(fontSize: 11, color: hintColor),
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 11, color: hintColor),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: borderColor, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: borderColor, width: 1.2),
+        ),
+      );
+    }
+
     return Column(
       children: [
         ...List.generate(_links.length, (i) {
           final row = _links[i];
           final isInList = _platforms.contains(row.platform);
+
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(10),
@@ -838,31 +865,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             child: Row(
               children: [
+                // Platform dropdown
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      labelText: "Platform",
-                      labelStyle: TextStyle(fontSize: 11),
-                    ),
                     value: isInList ? row.platform : null,
+                    decoration: _fieldDec(label: "Platform"),
+                    style: TextStyle(fontSize: 12, color: textColor),
+                    iconEnabledColor: textColor,
+                    iconDisabledColor: textColor,
+                    dropdownColor: theme.cardColor,
                     hint:
                         (!isInList && row.platform.isNotEmpty)
                             ? Text(
                               row.platform,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
+                              style: TextStyle(fontSize: 12, color: textColor),
                             )
                             : null,
                     selectedItemBuilder:
@@ -875,7 +895,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       p,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: textColor,
+                                      ),
                                     ),
                                   ),
                                 )
@@ -889,7 +912,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   p,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: textColor,
+                                  ),
                                 ),
                               ),
                             )
@@ -901,20 +927,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+
+                // URL field
                 Expanded(
                   flex: 7,
                   child: TextFormField(
                     initialValue: row.url,
-                    style: const TextStyle(fontSize: 12),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      labelText: "URL (with or without https)",
-                      labelStyle: TextStyle(fontSize: 11),
-                      hintStyle: TextStyle(fontSize: 11),
+                    style: TextStyle(fontSize: 12, color: textColor),
+                    decoration: _fieldDec(
+                      label: "URL (with or without https)",
+                      hint: "example.com/you",
                     ),
                     onChanged: (v) => _links[i] = row.copyWith(url: v),
                     validator: (v) {
@@ -928,9 +950,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+
+                // Delete icon
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   iconSize: 18,
+                  color: textColor,
                   constraints: const BoxConstraints.tightFor(
                     width: 32,
                     height: 32,
@@ -960,6 +985,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             label: const Text(
               "Add another link",
               style: TextStyle(fontSize: 12),
+            ),
+            style: ButtonStyle(
+              foregroundColor: WidgetStatePropertyAll(
+                theme.colorScheme.primary,
+              ),
             ),
           ),
         ),
