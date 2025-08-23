@@ -3,6 +3,7 @@ import 'package:flutter_html/flutter_html.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:readmore/readmore.dart';
+import 'package:rwa_app/screens/profile/new_profile.dart';
 import 'package:rwa_app/widgets/html_preview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
@@ -41,6 +42,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   void initState() {
     super.initState();
     _initialize();
+    print('hereeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee------------------------');
   }
 
   Future<void> _initialize() async {
@@ -92,6 +94,10 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
     // ✅ Listen for newly added threads in this category
     socket.on('forumAdded', (data) {
       print('New thread added to category: $data');
+      final userObj =
+          (data['userId'] is Map)
+              ? data['userId'] as Map<String, dynamic>
+              : null;
 
       setState(() {
         threads.insert(0, {
@@ -102,6 +108,8 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
               (data['userId'] is Map)
                   ? (data['userId']?['userName'] ?? 'Unknown')
                   : 'Unknown',
+          'userId': userObj?['_id'] ?? '', // ✅
+          'profileImage': userObj?['profileImage'] ?? '', // ✅
           'replies': data['commentsCount'] ?? 0,
           'likes':
               (data['upvotes'] ?? 0) +
@@ -268,11 +276,15 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
               final dislikeCount = reactions['👎'] ?? 0;
 
+              final userObj = item['userId'] as Map<String, dynamic>?; // 👈
+
               return {
                 '_id': item['_id'] ?? '',
                 'title': item['title'] ?? '',
                 'description': item['text'] ?? '',
                 'author': item['userId']?['userName'] ?? 'Unknown',
+                'userId': userObj?['_id'] ?? '', // ✅ add this
+                'profileImage': userObj?['profileImage'] ?? '', // ✅ optional
                 'replies': item['commentsCount'] ?? 0,
                 'likes': likeCount,
                 'dislikes': dislikeCount,
@@ -638,6 +650,7 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                     ),
                     itemBuilder: (context, index) {
                       final thread = threads[index];
+                      print('Threadddddddddddddddddd ${thread}');
                       final isLiked = likedList[index];
                       final isDisliked = dislikedList[index];
                       final dislikeCount = thread['dislikes'] ?? 0;
@@ -708,26 +721,56 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                         thread['profileImage']
                                             .toString()
                                             .isNotEmpty)
-                                      CircleAvatar(
-                                        radius: 16,
-                                        backgroundImage: NetworkImage(
-                                          thread['profileImage'],
+                                      InkWell(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (_) => NewProfileScreen(
+                                                    viewedUserId:
+                                                        thread['userId'],
+                                                  ),
+                                            ),
+                                          );
+                                        },
+                                        child: CircleAvatar(
+                                          radius: 16,
+                                          backgroundImage: NetworkImage(
+                                            thread['profileImage'],
+                                          ),
                                         ),
                                       )
                                     else
-                                      CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: const Color(
-                                          0xFFEBB411,
-                                        ),
-                                        child: Text(
-                                          thread['author'].toString().isNotEmpty
-                                              ? thread['author'][0]
-                                                  .toUpperCase()
-                                              : '?',
-                                          style: GoogleFonts.inter(
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.white,
+                                      InkWell(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (_) => NewProfileScreen(
+                                                    viewedUserId:
+                                                        thread['userId'],
+                                                  ),
+                                            ),
+                                          );
+                                        },
+                                        child: CircleAvatar(
+                                          radius: 18,
+                                          backgroundColor: const Color(
+                                            0xFFEBB411,
+                                          ),
+                                          child: Text(
+                                            thread['author']
+                                                    .toString()
+                                                    .isNotEmpty
+                                                ? thread['author'][0]
+                                                    .toUpperCase()
+                                                : '?',
+                                            style: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
                                           ),
                                         ),
                                       ),
