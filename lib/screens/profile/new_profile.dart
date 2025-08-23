@@ -1,3 +1,5 @@
+// new_profile_screen.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -6,6 +8,10 @@ import 'package:rwa_app/screens/edit_profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+
+// ⬇️ NEW: for opening thread details
+import 'package:rwa_app/screens/thread_details_screen.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class NewProfileScreen extends StatefulWidget {
   /// If null or equal to the logged-in user's id (from SharedPreferences),
@@ -123,11 +129,32 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   int _followingsSize = 20;
   String _followingsFilter = "";
 
+  // ⬇️ NEW: shared socket to pass into ThreadDetailScreen
+  late IO.Socket _socket;
+
   @override
   void initState() {
     super.initState();
     _isFollowing = widget.isFollowingInitial;
+
+    // ⬇️ NEW: init socket once for this screen
+    _socket = IO.io(
+      'https://rwa-f1623a22e3ed.herokuapp.com',
+      IO.OptionBuilder().setTransports(['websocket']).build(),
+    );
+    // Connect early to avoid delay at first navigation
+    if (!_socket.connected) _socket.connect();
+
     _loadFromPrefs();
+  }
+
+  @override
+  void dispose() {
+    // ⬇️ NEW: cleanup
+    try {
+      _socket.dispose();
+    } catch (_) {}
+    super.dispose();
   }
 
   Future<void> _loadFromPrefs() async {
@@ -742,6 +769,57 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
+  // ⬇️ NEW: helpers to normalize + open a thread map
+  String _forumTitleFrom(Map<String, dynamic> f) {
+    final raw = (f['title'] ?? '').toString().trim();
+    if (raw.isNotEmpty) return raw;
+    return _extractTextFromHtml(f['text'] ?? '');
+  }
+
+  String? _stringId(dynamic v) {
+    if (v == null) return null;
+    if (v is String) return v;
+    if (v is Map && v['_id'] != null) return v['_id'].toString();
+    return null;
+  }
+
+  void _openThreadFromForumMap(Map<String, dynamic> f) {
+    final id = (f['_id'] ?? f['id'] ?? '').toString();
+    if (id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open thread: missing id')),
+      );
+      return;
+    }
+
+    final threadPayload = <String, dynamic>{
+      '_id': id,
+      'title': _forumTitleFrom(f),
+      'text': (f['text'] ?? '').toString(),
+      // author
+      'userId': f['userId'],
+      'userName':
+          (f['userId'] is Map && f['userId']['userName'] != null)
+              ? f['userId']['userName'].toString()
+              : (f['userName'] ?? '').toString(),
+      // counts
+      'commentsCount':
+          (f['commentsCount'] is num) ? (f['commentsCount'] as num).toInt() : 0,
+      // ids normalize whether object or string
+      'categoryId': _stringId(f['categoryId']),
+      'subCategoryId':
+          _stringId(f['subCategoryId']) ?? _stringId(f['categoryId']),
+    };
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => ThreadDetailScreen(thread: threadPayload, socket: _socket),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1088,9 +1166,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () {
-                    // TODO: Navigate to ForumThreadScreen with f['_id']
-                  },
+                  onTap: () => _openThreadFromForumMap(f), // ⬅️ NEW
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     child: Column(
@@ -1247,7 +1323,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
-  // ---------- Comments section (live API) ----------
+  // ---------- Comments section (tap → open parent forum) ----------
   Widget _buildCommentsSection() {
     if (_isCommentsLoading) {
       return const Padding(
@@ -1293,98 +1369,113 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(color: Colors.grey.shade300, width: .2),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header: forum title + time
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.forum,
-                            size: 16,
-                            color: Color(0xFFEBB411),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              forumTitle.trim().isEmpty
-                                  ? "(forum)"
-                                  : forumTitle,
-                              style: GoogleFonts.inter(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    if (forum == null ||
+                        (forum['_id'] ?? forum['id']) == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Unable to open: missing forum'),
+                        ),
+                      );
+                      return;
+                    }
+                    _openThreadFromForumMap(forum);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header: forum title + time
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.forum,
+                              size: 16,
+                              color: Color(0xFFEBB411),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.access_time,
-                            size: 14,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            _formatAgo(createdAt),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Quoted comment (if any)
-                      if (quoted != null) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.withOpacity(0.08),
-                            border: Border(
-                              left: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 3,
-                              ),
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (quoted["username"] != null &&
-                                        quoted["username"]
-                                            .toString()
-                                            .isNotEmpty)
-                                    ? "Quoted ${quoted["username"]}"
-                                    : "Quoted comment",
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                (quoted["text"] ?? "").toString(),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                forumTitle.trim().isEmpty
+                                    ? "(forum)"
+                                    : forumTitle,
                                 style: GoogleFonts.inter(
                                   fontSize: 12.5,
-                                  color: Colors.grey.shade800,
+                                  fontWeight: FontWeight.w700,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.access_time,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              _formatAgo(createdAt),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
-                      ],
 
-                      // User's comment
-                      Text(text, style: GoogleFonts.inter(fontSize: 13.5)),
-                    ],
+                        // Quoted comment (if any)
+                        if (quoted != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.08),
+                              border: Border(
+                                left: BorderSide(
+                                  color: Colors.grey.shade400,
+                                  width: 3,
+                                ),
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  (quoted["username"] != null &&
+                                          quoted["username"]
+                                              .toString()
+                                              .isNotEmpty)
+                                      ? "Quoted ${quoted["username"]}"
+                                      : "Quoted comment",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  (quoted["text"] ?? "").toString(),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12.5,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+
+                        // User's comment
+                        Text(text, style: GoogleFonts.inter(fontSize: 13.5)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1446,7 +1537,16 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () {
-                    // TODO: Navigate to ForumThreadScreen with forum['_id']
+                    final map = forum ?? {};
+                    if (map.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Unable to open: missing forum data'),
+                        ),
+                      );
+                      return;
+                    }
+                    _openThreadFromForumMap(map); // ⬅️ NEW
                   },
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
