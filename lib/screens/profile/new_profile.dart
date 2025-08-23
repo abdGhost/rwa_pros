@@ -71,6 +71,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   // Follow state when viewing someone else
   bool _isFollowing = false;
 
+  // ====== Follow/Unfollow network state ======
+  bool _isFollowBusy = false;
+  String? _followError;
+
   // ====== Badges for viewed profile ======
   bool _isBadgesLoading = false;
   String? _badgesError;
@@ -99,6 +103,24 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   bool _isCommentsLoading = false;
   String? _commentsError;
   List<Map<String, dynamic>> _userComments = [];
+
+  // ====== Followers ======
+  bool _isFollowersLoading = false;
+  String? _followersError;
+  List<Map<String, dynamic>> _followers = [];
+  int _followersTotal = 0;
+  int _followersPage = 1;
+  int _followersSize = 20;
+  String _followersFilter = "";
+
+  // ====== Followings ======
+  bool _isFollowingLoading = false;
+  String? _followingError;
+  List<Map<String, dynamic>> _followings = [];
+  int _followingsTotal = 0;
+  int _followingsPage = 1;
+  int _followingsSize = 20;
+  String _followingsFilter = "";
 
   @override
   void initState() {
@@ -173,6 +195,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       ),
     );
 
+    // Also fetch followers/followings (eager). You can make this lazy if preferred.
+    futures.add(_fetchFollowers(targetUserId, page: 1, size: 20));
+    futures.add(_fetchFollowings(targetUserId, page: 1, size: 20));
+
     await Future.wait(futures);
 
     // Debug (optional)
@@ -192,6 +218,16 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     return viewedId == (_userId ?? "");
   }
 
+  // ---------- Auth headers ----------
+  Future<Map<String, String>> _authHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jwt = prefs.getString('token');
+    return {
+      "Content-Type": "application/json",
+      if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
+    };
+  }
+
   // -------- Fetch full detail for viewed user ----------
   Future<void> _fetchViewedUserDetail(String userId) async {
     setState(() {
@@ -201,20 +237,11 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwt = prefs.getString('token'); // optional
-
       final uri = Uri.parse(
         "https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId",
       );
 
-      final res = await http.get(
-        uri,
-        headers: {
-          "Content-Type": "application/json",
-          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
-        },
-      );
+      final res = await http.get(uri, headers: await _authHeaders());
 
       if (res.statusCode != 200) {
         throw Exception("HTTP ${res.statusCode}: ${res.body}");
@@ -275,20 +302,11 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwt = prefs.getString('token'); // optional auth
-
       final uri = Uri.parse(
         "https://rwa-f1623a22e3ed.herokuapp.com/api/users/badges/$userId",
       );
 
-      final res = await http.get(
-        uri,
-        headers: {
-          "Content-Type": "application/json",
-          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
-        },
-      );
+      final res = await http.get(uri, headers: await _authHeaders());
 
       if (res.statusCode != 200) {
         throw Exception("HTTP ${res.statusCode}: ${res.body}");
@@ -313,20 +331,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         return s.isEmpty ? [] : [s];
       }
 
-      final tier = _asList(userStat["tieredProgression"]);
-      final reput = _asList(userStat["reputation"]);
-      final star = _asList(userStat["star"]);
-      final infl = _asList(userStat["influence"]);
-      final qual = _asList(userStat["quality"]);
-      final vip = _asList(userStat["vip"]);
-
       setState(() {
-        _viewedBadges["Tier"] = tier;
-        _viewedBadges["Reputation"] = reput;
-        _viewedBadges["Star"] = star;
-        _viewedBadges["Influence"] = infl;
-        _viewedBadges["Quality"] = qual;
-        _viewedBadges["VIP"] = vip;
+        _viewedBadges["Tier"] = _asList(userStat["tieredProgression"]);
+        _viewedBadges["Reputation"] = _asList(userStat["reputation"]);
+        _viewedBadges["Star"] = _asList(userStat["star"]);
+        _viewedBadges["Influence"] = _asList(userStat["influence"]);
+        _viewedBadges["Quality"] = _asList(userStat["quality"]);
+        _viewedBadges["VIP"] = _asList(userStat["vip"]);
       });
     } catch (e) {
       setState(() {
@@ -355,9 +366,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwt = prefs.getString("token");
-
       final String qCategory =
           (categoryId != null && categoryId.isNotEmpty) ? categoryId : "";
       final uri = Uri.parse(
@@ -365,13 +373,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         "?categoryId=$qCategory&page=$page&size=$size",
       );
 
-      final res = await http.get(
-        uri,
-        headers: {
-          "Content-Type": "application/json",
-          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
-        },
-      );
+      final res = await http.get(uri, headers: await _authHeaders());
 
       if (res.statusCode != 200) throw Exception(res.body);
 
@@ -410,21 +412,12 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwt = prefs.getString("token");
-
       final uri = Uri.parse(
         "https://rwa-f1623a22e3ed.herokuapp.com/api/forum/likes/user/$userId"
         "?page=$page&size=$size",
       );
 
-      final res = await http.get(
-        uri,
-        headers: {
-          "Content-Type": "application/json",
-          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
-        },
-      );
+      final res = await http.get(uri, headers: await _authHeaders());
 
       if (res.statusCode != 200) throw Exception(res.body);
 
@@ -458,22 +451,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jwt = prefs.getString("token");
-
       final qForum =
           (forumId != null && forumId.isNotEmpty) ? "?forumId=$forumId" : "";
       final uri = Uri.parse(
         "https://rwa-f1623a22e3ed.herokuapp.com/api/forum/comment/user/$userId$qForum",
       );
 
-      final res = await http.get(
-        uri,
-        headers: {
-          "Content-Type": "application/json",
-          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
-        },
-      );
+      final res = await http.get(uri, headers: await _authHeaders());
 
       if (res.statusCode != 200) throw Exception(res.body);
 
@@ -497,10 +481,189 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
+  // -------- Followers --------
+  Future<void> _fetchFollowers(
+    String userId, {
+    int? page,
+    int? size,
+    String? filter,
+  }) async {
+    setState(() {
+      _isFollowersLoading = true;
+      _followersError = null;
+    });
+
+    try {
+      final p = page ?? _followersPage;
+      final s = size ?? _followersSize;
+      final f = (filter ?? _followersFilter).trim();
+
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/follow/allFollower/$userId"
+        "?page=$p&size=$s&filter=$f",
+      );
+
+      final res = await http.get(uri, headers: await _authHeaders());
+      if (res.statusCode != 200) throw Exception(res.body);
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      print(data);
+      final list =
+          (data["followers"] ??
+                  data["items"] ??
+                  data["data"] ??
+                  data["list"] ??
+                  [])
+              as List<dynamic>;
+
+      setState(() {
+        _followers =
+            list
+                .map<Map<String, dynamic>>(
+                  (e) => Map<String, dynamic>.from(e as Map),
+                )
+                .toList();
+        _followersTotal =
+            (data["total"] ?? data["count"] ?? _followers.length) as int;
+        _followersPage = p;
+        _followersSize = s;
+        _followersFilter = f;
+      });
+    } catch (e) {
+      setState(() => _followersError = "Failed to load followers");
+    } finally {
+      setState(() => _isFollowersLoading = false);
+    }
+  }
+
+  // -------- Followings --------
+  Future<void> _fetchFollowings(
+    String userId, {
+    int? page,
+    int? size,
+    String? filter,
+  }) async {
+    setState(() {
+      _isFollowingLoading = true;
+      _followingError = null;
+    });
+
+    try {
+      final p = page ?? _followingsPage;
+      final s = size ?? _followingsSize;
+      final f = (filter ?? _followingsFilter).trim();
+
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/follow/allFollowing/$userId"
+        "?page=$p&size=$s&filter=$f",
+      );
+
+      final res = await http.get(uri, headers: await _authHeaders());
+      if (res.statusCode != 200) throw Exception(res.body);
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final list =
+          (data["followings"] ??
+                  data["items"] ??
+                  data["data"] ??
+                  data["list"] ??
+                  [])
+              as List<dynamic>;
+
+      setState(() {
+        _followings =
+            list
+                .map<Map<String, dynamic>>(
+                  (e) => Map<String, dynamic>.from(e as Map),
+                )
+                .toList();
+        _followingsTotal =
+            (data["total"] ?? data["count"] ?? _followings.length) as int;
+        _followingsPage = p;
+        _followingsSize = s;
+        _followingsFilter = f;
+      });
+    } catch (e) {
+      setState(() => _followingError = "Failed to load followings");
+    } finally {
+      setState(() => _isFollowingLoading = false);
+    }
+  }
+
+  // -------- Follow / Unfollow --------
+  Future<void> _followUser(String targetUserId) async {
+    if (_isFollowBusy) return;
+    setState(() {
+      _isFollowBusy = true;
+      _followError = null;
+    });
+
+    try {
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/follow/$targetUserId",
+      );
+      final res = await http.post(uri, headers: await _authHeaders());
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception("HTTP ${res.statusCode}: ${res.body}");
+      }
+      setState(() {
+        _isFollowing = true;
+        _vpFollower += 1;
+        _totalFollower += 1;
+      });
+
+      // refresh followers list for viewed profile if needed
+      final target = widget.viewedUserId ?? "";
+      if (target.isNotEmpty) {
+        _fetchFollowers(target, page: _followersPage, size: _followersSize);
+      }
+    } catch (e) {
+      setState(() => _followError = "Failed to follow user");
+    } finally {
+      setState(() => _isFollowBusy = false);
+    }
+  }
+
+  Future<void> _unfollowUser(String targetUserId) async {
+    if (_isFollowBusy) return;
+    setState(() {
+      _isFollowBusy = true;
+      _followError = null;
+    });
+
+    try {
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/follow/$targetUserId",
+      );
+      final res = await http.delete(uri, headers: await _authHeaders());
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception("HTTP ${res.statusCode}: ${res.body}");
+      }
+      setState(() {
+        _isFollowing = false;
+        _vpFollower = (_vpFollower - 1).clamp(0, 1 << 31);
+        _totalFollower = (_totalFollower - 1).clamp(0, 1 << 31);
+      });
+
+      final target = widget.viewedUserId ?? "";
+      if (target.isNotEmpty) {
+        _fetchFollowers(target, page: _followersPage, size: _followersSize);
+      }
+    } catch (e) {
+      setState(() => _followError = "Failed to unfollow user");
+    } finally {
+      setState(() => _isFollowBusy = false);
+    }
+  }
+
   Future<void> _toggleFollow() async {
-    // TODO: call your follow/unfollow API here.
-    setState(() => _isFollowing = !_isFollowing);
-    debugPrint(_isFollowing ? "✅ Now following" : "❌ Unfollowed");
+    final targetId = widget.viewedUserId ?? "";
+    if (targetId.isEmpty) return;
+    if (_isFollowing) {
+      await _unfollowUser(targetId);
+    } else {
+      await _followUser(targetId);
+    }
   }
 
   void _onEditProfile() {
@@ -644,11 +807,23 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                onPressed: _toggleFollow,
-                child: Text(
-                  _isFollowing ? "Following" : "Follow",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-                ),
+                onPressed: _isFollowBusy ? null : _toggleFollow,
+                child:
+                    _isFollowBusy
+                        ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                        : Text(
+                          _isFollowing ? "Following" : "Follow",
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                        ),
               ),
             ),
         ],
@@ -784,26 +959,20 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     if (_selectedTab == "Threads") _buildThreadsSection(),
                     if (_selectedTab == "Comments") _buildCommentsSection(),
                     if (_selectedTab == "Likes") _buildLikesSection(),
-                    if (_selectedTab == "Followers")
+                    if (_selectedTab == "Followers") _buildFollowersSection(),
+                    if (_selectedTab == "Following") _buildFollowingsSection(),
+
+                    const SizedBox(height: 8),
+                    if (_followError != null)
                       Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          "Followers: ${useViewed ? _vpFollower : _totalFollower}",
+                          _followError!,
                           style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: Colors.redAccent,
                           ),
-                        ),
-                      ),
-                    if (_selectedTab == "Following")
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          "Following: ${useViewed ? _vpFollowing : _totalFollowing}",
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     const SizedBox(height: 24),
@@ -826,7 +995,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
-  // ---------- Threads section (created forums) ----------
   // ---------- Threads section (created forums) ----------
   Widget _buildThreadsSection() {
     if (_isForumsLoading) {
@@ -979,9 +1147,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                 ),
                                 child: Text(
                                   categoryName,
+                                  // fixed contrast (was grey[200] which can be invisible on light bg)
                                   style: GoogleFonts.inter(
                                     fontSize: 11.5,
-                                    color: Colors.grey[200],
+                                    color: Colors.grey[800],
                                   ),
                                 ),
                               ),
@@ -1001,6 +1170,54 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                             ),
                           ),
                         ],
+
+                        // Footer stats
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.thumb_up_alt_outlined,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "$upvotes",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            const Icon(
+                              Icons.emoji_emotions_outlined,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "$reactionsCount",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            const Icon(
+                              Icons.mode_comment_outlined,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "$commentsCount",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1216,10 +1433,292 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
+  // ---------- Followers section ----------
+  Widget _buildFollowersSection() {
+    if (_isFollowersLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_followersError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _followersError!,
+          style: GoogleFonts.inter(color: Colors.redAccent),
+        ),
+      );
+    }
+    if (_followers.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          "No followers yet",
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Optional search box
+        // Padding(
+        //   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        //   child: TextField(
+        //     decoration: const InputDecoration(
+        //       hintText: "Filter followers",
+        //       isDense: true,
+        //       prefixIcon: Icon(Icons.search, size: 18),
+        //       border: OutlineInputBorder(),
+        //     ),
+        //     onSubmitted: (q) {
+        //       final targetUserId =
+        //           (widget.viewedUserId?.isNotEmpty ?? false)
+        //               ? widget.viewedUserId!
+        //               : (_userId ?? "");
+        //       _fetchFollowers(
+        //         targetUserId,
+        //         page: 1,
+        //         size: _followersSize,
+        //         filter: q,
+        //       );
+        //     },
+        //   ),
+        // ),
+        ..._followers.map((item) {
+          final u = _pickUserFromItem(item);
+          final name = u["name"]!;
+          final img = u["img"]!;
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.grey.shade300,
+              backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
+              child:
+                  img.isEmpty
+                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : "U")
+                      : null,
+            ),
+            title: Text(
+              name,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              "Follower",
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              // TODO: Navigate to that user's profile
+            },
+          );
+        }),
+
+        if (_followersTotal > _followersSize)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed:
+                      _followersPage > 1
+                          ? () {
+                            final targetUserId =
+                                (widget.viewedUserId?.isNotEmpty ?? false)
+                                    ? widget.viewedUserId!
+                                    : (_userId ?? "");
+                            _fetchFollowers(
+                              targetUserId,
+                              page: _followersPage - 1,
+                            );
+                          }
+                          : null,
+                  child: const Text("Prev"),
+                ),
+                const SizedBox(width: 8),
+                Text("Page $_followersPage", style: GoogleFonts.inter()),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed:
+                      (_followersPage * _followersSize) < _followersTotal
+                          ? () {
+                            final targetUserId =
+                                (widget.viewedUserId?.isNotEmpty ?? false)
+                                    ? widget.viewedUserId!
+                                    : (_userId ?? "");
+                            _fetchFollowers(
+                              targetUserId,
+                              page: _followersPage + 1,
+                            );
+                          }
+                          : null,
+                  child: const Text("Next"),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ---------- Followings section ----------
+  Widget _buildFollowingsSection() {
+    if (_isFollowingLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_followingError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _followingError!,
+          style: GoogleFonts.inter(color: Colors.redAccent),
+        ),
+      );
+    }
+    if (_followings.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          "Not following anyone yet",
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Optional search box
+        // Padding(
+        //   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        //   child: TextField(
+        //     decoration: const InputDecoration(
+        //       hintText: "Filter following",
+        //       isDense: true,
+        //       prefixIcon: Icon(Icons.search, size: 18),
+        //       border: OutlineInputBorder(),
+        //     ),
+        //     onSubmitted: (q) {
+        //       final targetUserId =
+        //           (widget.viewedUserId?.isNotEmpty ?? false)
+        //               ? widget.viewedUserId!
+        //               : (_userId ?? "");
+        //       _fetchFollowings(
+        //         targetUserId,
+        //         page: 1,
+        //         size: _followingsSize,
+        //         filter: q,
+        //       );
+        //     },
+        //   ),
+        // ),
+        ..._followings.map((item) {
+          final u = _pickUserFromItem(item);
+          final name = u["name"]!;
+          final img = u["img"]!;
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.grey.shade300,
+              backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
+              child:
+                  img.isEmpty
+                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : "U")
+                      : null,
+            ),
+            title: Text(
+              name,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              "Following",
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              // TODO: Navigate to that user's profile
+            },
+          );
+        }),
+
+        if (_followingsTotal > _followingsSize)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed:
+                      _followingsPage > 1
+                          ? () {
+                            final targetUserId =
+                                (widget.viewedUserId?.isNotEmpty ?? false)
+                                    ? widget.viewedUserId!
+                                    : (_userId ?? "");
+                            _fetchFollowings(
+                              targetUserId,
+                              page: _followingsPage - 1,
+                            );
+                          }
+                          : null,
+                  child: const Text("Prev"),
+                ),
+                const SizedBox(width: 8),
+                Text("Page $_followingsPage", style: GoogleFonts.inter()),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed:
+                      (_followingsPage * _followingsSize) < _followingsTotal
+                          ? () {
+                            final targetUserId =
+                                (widget.viewedUserId?.isNotEmpty ?? false)
+                                    ? widget.viewedUserId!
+                                    : (_userId ?? "");
+                            _fetchFollowings(
+                              targetUserId,
+                              page: _followingsPage + 1,
+                            );
+                          }
+                          : null,
+                  child: const Text("Next"),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   // ---------- Helpers ----------
+  Map<String, String> _pickUserFromItem(Map<String, dynamic> it) {
+    Map<String, dynamic>? candidate;
+
+    for (final k in [
+      "userId",
+      "followerId",
+      "followingId",
+      "target",
+      "source",
+    ]) {
+      if (it[k] is Map<String, dynamic>) {
+        candidate = it[k] as Map<String, dynamic>;
+        break;
+      }
+    }
+    candidate ??= it;
+
+    final id = (candidate!["_id"] ?? "").toString();
+    final name =
+        (candidate["userName"] ?? candidate["username"] ?? "User").toString();
+    final img = (candidate["profileImg"] ?? "").toString();
+
+    return {"id": id, "name": name, "img": img};
+  }
+
   String _extractTextFromHtml(dynamic htmlLike) {
     final s = (htmlLike ?? "").toString();
-    // very light HTML tag stripper
     return s.replaceAll(RegExp(r'<[^>]*>'), '').trim();
   }
 
@@ -1293,7 +1792,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             links.map((m) {
               final platform = m["platform"]!;
               String url = m["url"]!;
-              // prepend scheme if missing
               if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 url = "https://$url";
               }
@@ -1331,7 +1829,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     switch (p.toLowerCase()) {
       case "twitter":
       case "x":
-        return FontAwesomeIcons.xTwitter; // better icon for X/Twitter
+        return FontAwesomeIcons.xTwitter;
       case "telegram":
         return FontAwesomeIcons.telegram;
       case "linkedin":
