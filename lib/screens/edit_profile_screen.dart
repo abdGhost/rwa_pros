@@ -56,10 +56,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'Website',
   ];
 
+  // Normalize any API/platform text to our dropdown labels
+  static const Map<String, String> _platformCanonical = {
+    'twitter': 'Twitter',
+    'x': 'X',
+    'telegram': 'Telegram',
+    'linkedin': 'LinkedIn',
+    'youtube': 'YouTube',
+    'medium': 'Medium',
+    'website': 'Website',
+  };
+
   @override
   void initState() {
     super.initState();
     _hydrateInitials();
+    _hydrateFromPrefsIfMissing(); // async fallback (no await in initState)
     _checkLoginStatus();
   }
 
@@ -68,10 +80,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _emailCtrl.text = widget.initialEmail ?? '';
     _existingProfileUrl = widget.initialProfileImgUrl ?? '';
     _existingBannerUrl = widget.initialBannerImgUrl ?? '';
+
     for (final m in widget.initialLinks) {
-      _links.add(_LinkRow(platform: m['platform'] ?? '', url: m['url'] ?? ''));
+      final raw = (m['platform'] ?? '').trim();
+      final canon = _platformCanonical[raw.toLowerCase()] ?? raw;
+      _links.add(_LinkRow(platform: canon, url: m['url'] ?? ''));
     }
     if (_links.isEmpty) _links.add(_LinkRow(platform: '', url: ''));
+  }
+
+  Future<void> _hydrateFromPrefsIfMissing() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if ((_nameCtrl.text).trim().isEmpty) {
+      final savedName = prefs.getString('name') ?? '';
+      if (savedName.isNotEmpty) _nameCtrl.text = savedName;
+    }
+    if ((_emailCtrl.text).trim().isEmpty) {
+      final savedEmail = prefs.getString('email') ?? '';
+      if (savedEmail.isNotEmpty) _emailCtrl.text = savedEmail;
+    }
+
+    // Restore saved links if widget didn't pass any (or only a single blank row)
+    final savedLinksJson = prefs.getString('links');
+    if (savedLinksJson != null && savedLinksJson.isNotEmpty) {
+      final decoded = jsonDecode(savedLinksJson);
+      if (decoded is List) {
+        final restored = <_LinkRow>[];
+        for (final e in decoded) {
+          if (e is Map) {
+            final raw = (e['platform'] ?? '').toString();
+            final canon = _platformCanonical[raw.toLowerCase()] ?? raw;
+            restored.add(
+              _LinkRow(platform: canon, url: (e['url'] ?? '').toString()),
+            );
+          }
+        }
+        if (restored.isNotEmpty) {
+          setState(() {
+            _links
+              ..clear()
+              ..addAll(restored);
+          });
+        }
+      }
+    }
+
+    // Also restore images if the parent didn't pass them
+    if ((_existingProfileUrl ?? '').isEmpty) {
+      _existingProfileUrl = prefs.getString('profileImage') ?? '';
+      setState(() {});
+    }
+    if ((_existingBannerUrl ?? '').isEmpty) {
+      _existingBannerUrl = prefs.getString('bannerImage') ?? '';
+      setState(() {});
+    }
   }
 
   Future<void> _checkLoginStatus() async {
@@ -126,6 +189,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
+  String _normalizeUrl(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return t;
+    final hasScheme = RegExp(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://').hasMatch(t);
+    return hasScheme ? t : 'https://$t';
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -134,7 +204,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             .where(
               (e) => e.platform.trim().isNotEmpty && e.url.trim().isNotEmpty,
             )
-            .map((e) => {"platform": e.platform.trim(), "url": e.url.trim()})
+            .map(
+              (e) => {
+                "platform": e.platform.trim(),
+                "url": _normalizeUrl(e.url),
+              },
+            )
             .toList();
 
     setState(() {
@@ -149,6 +224,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final req = http.MultipartRequest("PUT", uri);
       req.headers.addAll(await _authHeaders());
 
+      // Debug logs
+      print("=== EDIT PROFILE SAVE START ===");
+      print("Request URL: $uri");
+      print("Headers: ${req.headers}");
+      print("UserName: ${_nameCtrl.text.trim()}");
+      print("Email: ${_emailCtrl.text.trim()}");
+      print("Remove Banner: $_removeBanner");
+      print("Remove Profile: $_removeProfile");
+      print("Links: $links");
+
       // fields
       req.fields['userName'] = _nameCtrl.text.trim();
       req.fields['email'] = _emailCtrl.text.trim();
@@ -158,6 +243,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       // files (only if changed)
       if (_pickedProfileFile != null) {
+        print("Attaching profile image: ${_pickedProfileFile!.path}");
         req.files.add(
           await http.MultipartFile.fromPath(
             'profileImg',
@@ -166,6 +252,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
       }
       if (_pickedBannerFile != null) {
+        print("Attaching banner image: ${_pickedBannerFile!.path}");
         req.files.add(
           await http.MultipartFile.fromPath(
             'bannerImg',
@@ -175,36 +262,87 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       final streamed = await req.send();
+      print("Request sent, awaiting response...");
+
       final res = await http.Response.fromStream(streamed);
+      print("Response Status: ${res.statusCode}");
+      print("Response Body: ${res.body}");
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception("HTTP ${res.statusCode}: ${res.body}");
       }
-      final payload = jsonDecode(res.body) as Map<String, dynamic>;
-      if (payload['status'] != true) {
-        throw Exception(payload['message'] ?? 'Unknown error');
+
+      final payload = jsonDecode(res.body);
+      if (payload is! Map) {
+        throw Exception("Unexpected response shape");
       }
+      final payloadMap = Map<String, dynamic>.from(payload);
+      print("Decoded Payload: $payloadMap");
+
+      if (payloadMap['status'] != true) {
+        throw Exception(payloadMap['message'] ?? 'Unknown error');
+      }
+
+      // --- SAFE PARSE OF OPTIONAL `data` ---
+      String? serverProfileUrl;
+      String? serverBannerUrl;
+      dynamic serverLinks;
+
+      final rawData = payloadMap['data'];
+      if (rawData is Map) {
+        final data = Map<String, dynamic>.from(rawData);
+        serverProfileUrl =
+            (data['profileImg'] ?? data['profileImage']) as String?;
+        serverBannerUrl = (data['bannerImg'] ?? data['bannerImage']) as String?;
+        serverLinks = data['link'] ?? data['links'];
+      } else {
+        serverProfileUrl = null;
+        serverBannerUrl = null;
+        serverLinks = null;
+      }
+
+      print("Parsed serverProfileUrl: $serverProfileUrl");
+      print("Parsed serverBannerUrl: $serverBannerUrl");
+      print("Parsed serverLinks: $serverLinks");
 
       // cache for instant UI refresh
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('name', _nameCtrl.text.trim());
       await prefs.setString('email', _emailCtrl.text.trim());
+      await prefs.setString('links', jsonEncode(links));
+
       await prefs.setString(
         'profileImage',
         _removeProfile
-            ? ""
-            : (_pickedProfileFile != null ? '' : (_existingProfileUrl ?? '')),
+            ? ''
+            : (serverProfileUrl ??
+                (_pickedProfileFile != null
+                    ? (_existingProfileUrl ?? '')
+                    : (_existingProfileUrl ?? ''))),
       );
+
       await prefs.setString(
         'bannerImage',
         _removeBanner
-            ? ""
-            : (_pickedBannerFile != null ? '' : (_existingBannerUrl ?? '')),
+            ? ''
+            : (serverBannerUrl ??
+                (_pickedBannerFile != null
+                    ? (_existingBannerUrl ?? '')
+                    : (_existingBannerUrl ?? ''))),
       );
+
+      // If server sends back normalized links, prefer those (optional)
+      if (serverLinks is List) {
+        await prefs.setString('links', jsonEncode(serverLinks));
+      }
+
+      print("=== EDIT PROFILE SAVE SUCCESS ===");
 
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (e) {
+    } catch (e, st) {
+      print("Save Error: $e");
+      print(st);
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -563,6 +701,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       children: [
         ...List.generate(_links.length, (i) {
           final row = _links[i];
+          final isInList = _platforms.contains(row.platform);
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(10),
@@ -591,33 +730,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       labelText: "Platform",
                       labelStyle: TextStyle(fontSize: 11),
                     ),
-                    value: row.platform.isEmpty ? null : row.platform,
+                    value: isInList ? row.platform : null,
+                    hint:
+                        (!isInList && row.platform.isNotEmpty)
+                            ? Text(
+                              row.platform,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            )
+                            : null,
                     // Make the selected value ALWAYS single-line with ellipsis
                     selectedItemBuilder:
                         (context) =>
-                            _platforms.map((p) {
-                              return Align(
-                                alignment: Alignment.centerLeft,
+                            _platforms
+                                .map(
+                                  (p) => Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      p,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                    items:
+                        _platforms
+                            .map(
+                              (p) => DropdownMenuItem(
+                                value: p,
                                 child: Text(
                                   p,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(fontSize: 12),
                                 ),
-                              );
-                            }).toList(),
-                    items:
-                        _platforms.map((p) {
-                          return DropdownMenuItem(
-                            value: p,
-                            child: Text(
-                              p,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          );
-                        }).toList(),
+                              ),
+                            )
+                            .toList(),
                     onChanged:
                         (v) => setState(
                           () => _links[i] = row.copyWith(platform: v ?? ''),
