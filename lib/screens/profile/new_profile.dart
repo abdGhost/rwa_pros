@@ -129,6 +129,39 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   // ⬇️ NEW: social links for *my* profile (self)
   List<Map<String, String>> _myLinks = []; // [{platform,url}]
 
+  // --- THEME HELPERS (dark/light aware) ---
+  Color _cardBg(ThemeData t) =>
+      t.brightness == Brightness.dark
+          ? const Color(0xFF121317)
+          : t.colorScheme.surface;
+
+  Color _chipBg(ThemeData t) =>
+      t.brightness == Brightness.dark
+          ? const Color(0xFF1A1C20)
+          : t.colorScheme.surfaceVariant;
+
+  Color _outline(ThemeData t) {
+    return t.brightness == Brightness.dark
+        ? Colors.white.withOpacity(0.06)
+        : (t.colorScheme.outlineVariant.withOpacity(0.5));
+  }
+
+  Color _muted(ThemeData t) => t.colorScheme.onSurface.withOpacity(0.64);
+  Color _mutedStrong(ThemeData t) => t.colorScheme.onSurface.withOpacity(0.80);
+
+  MaterialStateProperty<Color?> _inkOverlay(ThemeData t) {
+    final base = t.colorScheme.primary;
+    return MaterialStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(MaterialState.pressed)) {
+        return base.withOpacity(t.brightness == Brightness.dark ? 0.12 : 0.08);
+      }
+      if (states.contains(MaterialState.hovered)) {
+        return base.withOpacity(t.brightness == Brightness.dark ? 0.06 : 0.04);
+      }
+      return Colors.transparent;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -911,6 +944,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             textStyle: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w900,
               fontSize: 20,
+              color: theme.colorScheme.onSurface,
             ),
           ),
         ),
@@ -1038,7 +1072,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -1057,7 +1091,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       _formatJoinedDate(displayCreatedAt),
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey,
+                        color: _muted(theme),
                       ),
                     ),
 
@@ -1070,13 +1104,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         displayDesc.isEmpty ? "No bio yet" : displayDesc,
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                         textAlign: TextAlign.center,
                       ),
                     ),
 
-                    // ⬇️ NEW: Social Links (now also for *my* profile)
+                    // ⬇️ Social Links
                     if (linksToShow.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _buildLinksRow(linksToShow, Theme.of(context)),
@@ -1133,6 +1167,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // ---------- Threads section (created forums) ----------
   Widget _buildThreadsSection() {
+    final theme = Theme.of(context);
+
     if (_isForumsLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
@@ -1153,7 +1189,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Text(
           "No threads yet",
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+          style: GoogleFonts.inter(fontSize: 13, color: _muted(theme)),
         ),
       );
     }
@@ -1197,14 +1233,15 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Card(
                 elevation: 0,
-                color: Theme.of(context).cardColor,
+                color: _cardBg(theme),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.grey.shade300, width: .2),
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: _outline(theme), width: 1),
                 ),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   onTap: () => _openThreadFromForumMap(f),
+                  overlayColor: _inkOverlay(theme),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     child: Column(
@@ -1223,24 +1260,25 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                               child: Text(
                                 title.isEmpty ? "(untitled)" : title,
                                 style: GoogleFonts.inter(
-                                  fontSize: 13.5,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w800,
+                                  color: theme.colorScheme.onSurface,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(
+                            Icon(
                               Icons.access_time,
                               size: 14,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             const SizedBox(width: 2),
                             Text(
                               _formatAgo(createdAt),
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: _muted(theme),
                               ),
                             ),
                           ],
@@ -1256,17 +1294,19 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                   "by $author",
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    color: Colors.grey,
+                                    color: _muted(theme),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             if (author.isNotEmpty && categoryName.isNotEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
                                 child: Text(
                                   "•",
-                                  style: TextStyle(color: Colors.grey),
+                                  style: TextStyle(color: _muted(theme)),
                                 ),
                               ),
                             if (categoryName.isNotEmpty)
@@ -1276,14 +1316,15 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.withOpacity(0.08),
+                                  color: _chipBg(theme),
                                   borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: _outline(theme)),
                                 ),
                                 child: Text(
                                   categoryName,
                                   style: GoogleFonts.inter(
                                     fontSize: 11.5,
-                                    color: Colors.grey[800],
+                                    color: _mutedStrong(theme),
                                   ),
                                 ),
                               ),
@@ -1300,6 +1341,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 13.0,
                               height: 1.35,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                         ],
@@ -1308,45 +1350,45 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.thumb_up_alt_outlined,
                               size: 16,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               "$upvotes",
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: _muted(theme),
                               ),
                             ),
                             const SizedBox(width: 14),
-                            const Icon(
+                            Icon(
                               Icons.emoji_emotions_outlined,
                               size: 16,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               "$reactionsCount",
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: _muted(theme),
                               ),
                             ),
                             const SizedBox(width: 14),
-                            const Icon(
+                            Icon(
                               Icons.mode_comment_outlined,
                               size: 16,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               "$commentsCount",
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: _muted(theme),
                               ),
                             ),
                           ],
@@ -1363,6 +1405,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // ---------- Comments section (tap → open parent forum) ----------
   Widget _buildCommentsSection() {
+    final theme = Theme.of(context);
+
     if (_isCommentsLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
@@ -1383,7 +1427,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Text(
           "No comments yet",
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+          style: GoogleFonts.inter(fontSize: 13, color: _muted(theme)),
         ),
       );
     }
@@ -1401,13 +1445,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Card(
                 elevation: 0,
-                color: Theme.of(context).cardColor,
+                color: _cardBg(theme),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.grey.shade300, width: .2),
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: _outline(theme), width: 1),
                 ),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   onTap: () {
                     if (forum == null ||
                         (forum['_id'] ?? forum['id']) == null) {
@@ -1420,6 +1464,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     }
                     _openThreadFromForumMap(forum);
                   },
+                  overlayColor: _inkOverlay(theme),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     child: Column(
@@ -1442,22 +1487,23 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                 style: GoogleFonts.inter(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.onSurface,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(
+                            Icon(
                               Icons.access_time,
                               size: 14,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             const SizedBox(width: 2),
                             Text(
                               _formatAgo(createdAt),
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: _muted(theme),
                               ),
                             ),
                           ],
@@ -1470,10 +1516,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.grey.withOpacity(0.08),
+                              color: _chipBg(theme),
                               border: Border(
                                 left: BorderSide(
-                                  color: Colors.grey.shade400,
+                                  color: _outline(theme),
                                   width: 3,
                                 ),
                               ),
@@ -1492,7 +1538,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.grey.shade700,
+                                    color: _mutedStrong(theme),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -1500,7 +1546,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                   (quoted["text"] ?? "").toString(),
                                   style: GoogleFonts.inter(
                                     fontSize: 12.5,
-                                    color: Colors.grey.shade800,
+                                    color: theme.colorScheme.onSurface,
                                   ),
                                 ),
                               ],
@@ -1510,7 +1556,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         ],
 
                         // User's comment
-                        Text(text, style: GoogleFonts.inter(fontSize: 13.5)),
+                        Text(
+                          text,
+                          style: GoogleFonts.inter(
+                            fontSize: 13.5,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1523,6 +1575,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // ---------- Likes section (liked forums) ----------
   Widget _buildLikesSection() {
+    final theme = Theme.of(context);
+
     if (_isLikesLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
@@ -1543,7 +1597,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Text(
           "No likes yet",
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+          style: GoogleFonts.inter(fontSize: 13, color: _muted(theme)),
         ),
       );
     }
@@ -1566,13 +1620,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Card(
                 elevation: 0,
-                color: Theme.of(context).cardColor,
+                color: _cardBg(theme),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.grey.shade300, width: .2),
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: _outline(theme), width: 1),
                 ),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   onTap: () {
                     final map = forum ?? {};
                     if (map.isEmpty) {
@@ -1585,6 +1639,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     }
                     _openThreadFromForumMap(map);
                   },
+                  overlayColor: _inkOverlay(theme),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     child: Column(
@@ -1605,22 +1660,23 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                 style: GoogleFonts.inter(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w800,
+                                  color: theme.colorScheme.onSurface,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(
+                            Icon(
                               Icons.access_time,
                               size: 14,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             const SizedBox(width: 2),
                             Text(
                               _formatAgo(createdAt),
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: _muted(theme),
                               ),
                             ),
                           ],
@@ -1631,7 +1687,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                             "by $author",
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: Colors.grey,
+                              color: _muted(theme),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1679,6 +1735,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // ---------- Followers section ----------
   Widget _buildFollowersSection() {
+    final theme = Theme.of(context);
+
     if (_isFollowersLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
@@ -1699,7 +1757,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Text(
           "No followers yet",
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+          style: GoogleFonts.inter(fontSize: 13, color: _muted(theme)),
         ),
       );
     }
@@ -1718,14 +1776,14 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Card(
               elevation: 0,
-              color: Theme.of(context).cardColor,
+              color: _cardBg(theme),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade300, width: .2),
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: _outline(theme), width: 1),
               ),
-              // ⬇️ NEW: tapping a follower opens their profile
+              // ⬇️ tapping a follower opens their profile
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 onTap: () {
                   if (id.isEmpty) return;
                   Navigator.push(
@@ -1739,6 +1797,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     ),
                   );
                 },
+                overlayColor: _inkOverlay(theme),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   child: Row(
@@ -1755,37 +1814,38 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                               style: GoogleFonts.inter(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.onSurface,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.person,
                                   size: 14,
-                                  color: Colors.grey,
+                                  color: _muted(theme),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   "Follower",
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    color: Colors.grey,
+                                    color: _muted(theme),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                const Icon(
+                                Icon(
                                   Icons.access_time,
                                   size: 14,
-                                  color: Colors.grey,
+                                  color: _muted(theme),
                                 ),
                                 const SizedBox(width: 2),
                                 Text(
                                   _formatAgo(createdAt),
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    color: Colors.grey,
+                                    color: _muted(theme),
                                   ),
                                 ),
                               ],
@@ -1849,7 +1909,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                   child: const Text("Prev"),
                 ),
                 const SizedBox(width: 8),
-                Text("Page $_followersPage", style: GoogleFonts.inter()),
+                Text(
+                  "Page $_followersPage",
+                  style: GoogleFonts.inter(color: theme.colorScheme.onSurface),
+                ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed:
@@ -1876,6 +1939,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // ---------- Followings section ----------
   Widget _buildFollowingsSection() {
+    final theme = Theme.of(context);
+
     if (_isFollowingLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
@@ -1896,7 +1961,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Text(
           "Not following anyone yet",
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+          style: GoogleFonts.inter(fontSize: 13, color: _muted(theme)),
         ),
       );
     }
@@ -1915,14 +1980,14 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Card(
               elevation: 0,
-              color: Theme.of(context).cardColor,
+              color: _cardBg(theme),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade300, width: .2),
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: _outline(theme), width: 1),
               ),
-              // ⬇️ NEW: tapping a following opens their profile
+              // ⬇️ tapping a following opens their profile
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 onTap: () {
                   if (id.isEmpty) return;
                   Navigator.push(
@@ -1931,12 +1996,12 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       builder:
                           (_) => NewProfileScreen(
                             viewedUserId: id,
-                            isFollowingInitial:
-                                true, // since this is in "Following"
+                            isFollowingInitial: true, // “Following” tab
                           ),
                     ),
                   );
                 },
+                overlayColor: _inkOverlay(theme),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   child: Row(
@@ -1953,37 +2018,38 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                               style: GoogleFonts.inter(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.onSurface,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.person_add_alt_1,
                                   size: 14,
-                                  color: Colors.grey,
+                                  color: _muted(theme),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   "Following",
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    color: Colors.grey,
+                                    color: _muted(theme),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                const Icon(
+                                Icon(
                                   Icons.access_time,
                                   size: 14,
-                                  color: Colors.grey,
+                                  color: _muted(theme),
                                 ),
                                 const SizedBox(width: 2),
                                 Text(
                                   _formatAgo(createdAt),
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    color: Colors.grey,
+                                    color: _muted(theme),
                                   ),
                                 ),
                               ],
@@ -2047,7 +2113,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                   child: const Text("Prev"),
                 ),
                 const SizedBox(width: 8),
-                Text("Page $_followingsPage", style: GoogleFonts.inter()),
+                Text(
+                  "Page $_followingsPage",
+                  style: GoogleFonts.inter(color: theme.colorScheme.onSurface),
+                ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed:
@@ -2156,7 +2225,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         color:
                             isSelected
                                 ? const Color(0xFFEBB411)
-                                : Colors.grey.shade300,
+                                : _outline(theme),
                       ),
                     ),
                     child: Text(
@@ -2167,9 +2236,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         color:
                             isSelected
                                 ? Colors.white
-                                : (theme.brightness == Brightness.dark
-                                    ? Colors.white
-                                    : Colors.black),
+                                : theme.colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -2212,6 +2279,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     ).showSnackBar(SnackBar(content: Text("Cannot open $url")));
                   }
                 },
+                borderRadius: BorderRadius.circular(18),
                 child: CircleAvatar(
                   radius: 18,
                   backgroundColor:
@@ -2246,7 +2314,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
-  // ---------- Badges (kept as-is) ----------
+  // ---------- Badges ----------
   Widget _buildBadgesSection(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
@@ -2263,13 +2331,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(height: 10),
               Text(
                 "Loading badges...",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
+                style: GoogleFonts.inter(fontSize: 12, color: _muted(theme)),
               ),
             ],
           ),
@@ -2301,6 +2366,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
               ),
             ),
           ),
@@ -2327,18 +2393,21 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   Widget _buildBadgeChip(String label, bool isDark) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-        border: Border.all(
-          color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
-        ),
+        color: _chipBg(theme),
+        border: Border.all(color: _outline(theme)),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
-        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: theme.colorScheme.onSurface,
+        ),
       ),
     );
   }
