@@ -949,7 +949,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         actions: [
           if (_isMe)
             IconButton(
-              icon: Icon(Icons.edit, size: 26, color: theme.iconTheme.color),
+              icon: Icon(Icons.edit, size: 22, color: theme.iconTheme.color),
               onPressed: _onEditProfile,
             )
           else
@@ -963,21 +963,23 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           : const Color(0xFFEBB411),
                   foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
+                    horizontal: 12,
+                    vertical: 6,
                   ),
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
                 onPressed: _isFollowBusy ? null : _toggleFollow,
                 child:
                     _isFollowBusy
                         ? const SizedBox(
-                          width: 16,
-                          height: 16,
+                          width: 12,
+                          height: 12,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: 1,
                             valueColor: AlwaysStoppedAnimation<Color>(
                               Colors.white,
                             ),
@@ -985,7 +987,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                         )
                         : Text(
                           _isFollowing ? "Following" : "Follow",
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12, // ⬅️ smaller font
+                          ),
                         ),
               ),
             ),
