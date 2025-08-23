@@ -131,14 +131,12 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // --- THEME HELPERS (dark/light aware) ---
   Color _cardBg(ThemeData t) =>
-      t.brightness == Brightness.dark
-          ? const Color(0xFF121317)
-          : t.colorScheme.surface;
+      t.brightness == Brightness.dark ? const Color(0xFF121317) : Colors.white;
 
   Color _chipBg(ThemeData t) =>
       t.brightness == Brightness.dark
           ? const Color(0xFF1A1C20)
-          : t.colorScheme.surfaceVariant;
+          : const Color.fromARGB(209, 237, 237, 237);
 
   Color _outline(ThemeData t) {
     return t.brightness == Brightness.dark
@@ -1233,6 +1231,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Card(
                 elevation: 0,
+
                 color: _cardBg(theme),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -1346,53 +1345,53 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ),
                         ],
 
-                        // Footer stats
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.thumb_up_alt_outlined,
-                              size: 16,
-                              color: _muted(theme),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "$upvotes",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: _muted(theme),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Icon(
-                              Icons.emoji_emotions_outlined,
-                              size: 16,
-                              color: _muted(theme),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "$reactionsCount",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: _muted(theme),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Icon(
-                              Icons.mode_comment_outlined,
-                              size: 16,
-                              color: _muted(theme),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "$commentsCount",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: _muted(theme),
-                              ),
-                            ),
-                          ],
-                        ),
+                        // // Footer stats
+                        // const SizedBox(height: 10),
+                        // Row(
+                        //   children: [
+                        //     Icon(
+                        //       Icons.thumb_up_alt_outlined,
+                        //       size: 16,
+                        //       color: _muted(theme),
+                        //     ),
+                        //     const SizedBox(width: 4),
+                        //     Text(
+                        //       "$upvotes",
+                        //       style: GoogleFonts.inter(
+                        //         fontSize: 12,
+                        //         color: _muted(theme),
+                        //       ),
+                        //     ),
+                        //     const SizedBox(width: 14),
+                        //     Icon(
+                        //       Icons.emoji_emotions_outlined,
+                        //       size: 16,
+                        //       color: _muted(theme),
+                        //     ),
+                        //     const SizedBox(width: 4),
+                        //     Text(
+                        //       "$reactionsCount",
+                        //       style: GoogleFonts.inter(
+                        //         fontSize: 12,
+                        //         color: _muted(theme),
+                        //       ),
+                        //     ),
+                        //     const SizedBox(width: 14),
+                        //     Icon(
+                        //       Icons.mode_comment_outlined,
+                        //       size: 16,
+                        //       color: _muted(theme),
+                        //     ),
+                        //     const SizedBox(width: 4),
+                        //     Text(
+                        //       "$commentsCount",
+                        //       style: GoogleFonts.inter(
+                        //         fontSize: 12,
+                        //         color: _muted(theme),
+                        //       ),
+                        //     ),
+                        //   ],
+                        // ),
                       ],
                     ),
                   ),
@@ -1533,7 +1532,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                           quoted["username"]
                                               .toString()
                                               .isNotEmpty)
-                                      ? "Quoted ${quoted["username"]}"
+                                      ? "-${quoted["username"]}"
                                       : "Quoted comment",
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
