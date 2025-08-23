@@ -9,19 +9,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-// ⬇️ NEW: for opening thread details
+// ⬇️ existing: open thread details
 import 'package:rwa_app/screens/thread_details_screen.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class NewProfileScreen extends StatefulWidget {
-  /// If null or equal to the logged-in user's id (from SharedPreferences),
-  /// we treat it as "my profile". Otherwise it's "someone else's profile".
   final String? viewedUserId;
-
-  /// Optional initial follow state when viewing someone else.
   final bool isFollowingInitial;
-
-  /// Optional: pass a forumId to filter the Comments tab to a specific forum.
   final String? filterForumIdForComments;
 
   const NewProfileScreen({
@@ -132,6 +126,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   // ⬇️ NEW: shared socket to pass into ThreadDetailScreen
   late IO.Socket _socket;
 
+  // ⬇️ NEW: social links for *my* profile (self)
+  List<Map<String, String>> _myLinks = []; // [{platform,url}]
+
   @override
   void initState() {
     super.initState();
@@ -142,7 +139,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       'https://rwa-f1623a22e3ed.herokuapp.com',
       IO.OptionBuilder().setTransports(['websocket']).build(),
     );
-    // Connect early to avoid delay at first navigation
     if (!_socket.connected) _socket.connect();
 
     _loadFromPrefs();
@@ -150,7 +146,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   @override
   void dispose() {
-    // ⬇️ NEW: cleanup
     try {
       _socket.dispose();
     } catch (_) {}
@@ -211,6 +206,11 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     if (!_isMe && (widget.viewedUserId ?? "").isNotEmpty) {
       futures.add(_fetchViewedUserDetail(widget.viewedUserId!));
       futures.add(_fetchViewedUserBadges(widget.viewedUserId!));
+    }
+
+    // ⬇️ NEW: also fetch *my* links so social icons show on my own profile
+    if (_isMe && (_userId ?? "").isNotEmpty) {
+      futures.add(_fetchMyLinksAndTier(_userId!));
     }
 
     // Always fetch created + liked forums + comments for the target user
@@ -318,6 +318,46 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       debugPrint("❌ Viewed profile error: $e");
     } finally {
       if (mounted) setState(() => _isViewedLoading = false);
+    }
+  }
+
+  // ⬇️ NEW: fetch *my* links & tier (so my own profile shows social icons)
+  Future<void> _fetchMyLinksAndTier(String userId) async {
+    try {
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId",
+      );
+      final res = await http.get(uri, headers: await _authHeaders());
+      if (res.statusCode != 200) throw Exception("HTTP ${res.statusCode}");
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data["status"] != true || data["userDetail"] == null) {
+        throw Exception("Invalid payload");
+      }
+
+      final detail = (data["userDetail"] as Map<String, dynamic>);
+      final linksDyn = (detail["link"] as List?) ?? [];
+      final myLinks =
+          linksDyn
+              .map<Map<String, String>>(
+                (e) => {
+                  "platform": (e["platform"] ?? "").toString(),
+                  "url": (e["url"] ?? "").toString(),
+                },
+              )
+              .where((m) => m["platform"]!.isNotEmpty && m["url"]!.isNotEmpty)
+              .toList();
+
+      // optional tier override from stat if present
+      final stat = (data["stat"] as Map<String, dynamic>?);
+      final myTier = stat?["tieredProgression"]?.toString();
+
+      setState(() {
+        _myLinks = myLinks;
+        if ((myTier ?? "").isNotEmpty) _tier = myTier;
+      });
+    } catch (e) {
+      debugPrint("❌ fetchMyLinksAndTier error: $e");
     }
   }
 
@@ -639,7 +679,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         _totalFollower += 1; // if it's me being followed
       });
 
-      // refresh followers list for viewed profile if needed
       final target = widget.viewedUserId ?? "";
       if (target.isNotEmpty) {
         _fetchFollowers(target, page: _followersPage, size: _followersSize);
@@ -694,27 +733,23 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   void _onEditProfile() async {
-    // Pass current values for convenience (from "me")
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
             (_) => EditProfileScreen(
               initialName: _userName ?? '',
-              initialEmail: '', // put your stored email if you cache it
+              initialEmail: '',
               initialProfileImgUrl: _profileImageUrl ?? '',
               initialBannerImgUrl: _bannerImageUrl ?? '',
-              initialLinks:
-                  _isMe ? [] : [], // if you cache self links, pass them
+              initialLinks: _isMe ? [] : [],
             ),
       ),
     );
 
-    // If saved, refresh local data and (optionally) server detail
     if (result == true) {
-      await _loadFromPrefs(); // refresh from SharedPreferences
-      // If you also have a self-detail endpoint, you can call it here
-      setState(() {}); // rebuild
+      await _loadFromPrefs();
+      setState(() {});
     }
   }
 
@@ -761,7 +796,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
       if (diff.inHours < 24) return "${diff.inHours}h ago";
       if (diff.inDays < 7) return "${diff.inDays}d ago";
-      // fallback to date
       return "${dt.day.toString().padLeft(2, '0')}/"
           "${dt.month.toString().padLeft(2, '0')}/${dt.year}";
     } catch (_) {
@@ -769,7 +803,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
-  // ⬇️ NEW: helpers to normalize + open a thread map
+  // helpers to normalize + open a thread map
   String _forumTitleFrom(Map<String, dynamic> f) {
     final raw = (f['title'] ?? '').toString().trim();
     if (raw.isNotEmpty) return raw;
@@ -796,16 +830,13 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       '_id': id,
       'title': _forumTitleFrom(f),
       'text': (f['text'] ?? '').toString(),
-      // author
       'userId': f['userId'],
       'userName':
           (f['userId'] is Map && f['userId']['userName'] != null)
               ? f['userId']['userName'].toString()
               : (f['userName'] ?? '').toString(),
-      // counts
       'commentsCount':
           (f['commentsCount'] is num) ? (f['commentsCount'] as num).toInt() : 0,
-      // ids normalize whether object or string
       'categoryId': _stringId(f['categoryId']),
       'subCategoryId':
           _stringId(f['subCategoryId']) ?? _stringId(f['categoryId']),
@@ -862,10 +893,12 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       "Following ($tFollowing)",
     ];
 
-    // Normalize selection if a label changed due to counts
     if (!tabs.any((t) => t.startsWith(_selectedTab))) {
       _selectedTab = "Threads";
     }
+
+    // ⬇️ NEW: decide which links to show (self vs viewed)
+    final linksToShow = _isMe ? _myLinks : _vpLinks;
 
     return Scaffold(
       appBar: AppBar(
@@ -1043,10 +1076,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       ),
                     ),
 
-                    // Social Links (only when viewing others & links exist)
-                    if (!_isMe && _vpLinks.isNotEmpty) ...[
+                    // ⬇️ NEW: Social Links (now also for *my* profile)
+                    if (linksToShow.isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      _buildLinksRow(_vpLinks, Theme.of(context)),
+                      _buildLinksRow(linksToShow, Theme.of(context)),
                     ],
 
                     const SizedBox(height: 16),
@@ -1054,11 +1087,16 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                     const SizedBox(height: 8),
 
                     // ----------------- Tab content -----------------
-                    if (_selectedTab == "Threads") _buildThreadsSection(),
-                    if (_selectedTab == "Comments") _buildCommentsSection(),
-                    if (_selectedTab == "Likes") _buildLikesSection(),
-                    if (_selectedTab == "Followers") _buildFollowersSection(),
-                    if (_selectedTab == "Following") _buildFollowingsSection(),
+                    if (_selectedTab == "Threads")
+                      _buildThreadsSection()
+                    else if (_selectedTab == "Comments")
+                      _buildCommentsSection()
+                    else if (_selectedTab == "Likes")
+                      _buildLikesSection()
+                    else if (_selectedTab == "Followers")
+                      _buildFollowersSection()
+                    else if (_selectedTab == "Following")
+                      _buildFollowingsSection(),
 
                     const SizedBox(height: 8),
                     if (_followError != null)
@@ -1166,7 +1204,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () => _openThreadFromForumMap(f), // ⬅️ NEW
+                  onTap: () => _openThreadFromForumMap(f),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     child: Column(
@@ -1357,8 +1395,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             final forum = c["forumId"] as Map<String, dynamic>?;
             final forumTitle = forum?["title"]?.toString() ?? "(forum)";
             final createdAt = c["createdAt"]?.toString();
-            final quoted =
-                c["quotedCommentedId"] as Map<String, dynamic>?; // may be null
+            final quoted = c["quotedCommentedId"] as Map<String, dynamic>?;
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1546,7 +1583,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       );
                       return;
                     }
-                    _openThreadFromForumMap(map); // ⬅️ NEW
+                    _openThreadFromForumMap(map);
                   },
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -1610,7 +1647,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
   // ---------- Inline follow helpers ----------
   bool _isFollowingUser(String userId) {
-    // consider them "following" if they appear in current _followings
     return _followings.any((it) => _pickUserFromItem(it)["id"] == userId);
   }
 
@@ -1621,7 +1657,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     } else {
       await _followUser(userId);
     }
-    // refresh both lists to keep badges & buttons in sync
     final targetUserId =
         (widget.viewedUserId?.isNotEmpty ?? false)
             ? widget.viewedUserId!
@@ -1688,86 +1723,103 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(color: Colors.grey.shade300, width: .2),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _userAvatar(name, img, radius: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.inter(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+              // ⬇️ NEW: tapping a follower opens their profile
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  if (id.isEmpty) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => NewProfileScreen(
+                            viewedUserId: id,
+                            isFollowingInitial: following,
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.person,
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "Follower",
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Icon(
-                                Icons.access_time,
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                _formatAgo(createdAt),
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
                     ),
-                    if (!_isMe && id != (_userId ?? ""))
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          backgroundColor:
-                              following
-                                  ? Colors.grey.shade300
-                                  : const Color(0xFFEBB411),
-                          foregroundColor:
-                              following ? Colors.black87 : Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () => _toggleFollowUserInline(id),
-                        child: Text(
-                          following ? "Following" : "Follow",
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _userAvatar(name, img, radius: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: GoogleFonts.inter(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.person,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "Follower",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Icon(
+                                  Icons.access_time,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  _formatAgo(createdAt),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+                      if (!_isMe && id != (_userId ?? ""))
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            backgroundColor:
+                                following
+                                    ? Colors.grey.shade300
+                                    : const Color(0xFFEBB411),
+                            foregroundColor:
+                                following ? Colors.black87 : Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            minimumSize: const Size(0, 0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () => _toggleFollowUserInline(id),
+                          child: Text(
+                            following ? "Following" : "Follow",
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1868,86 +1920,104 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(color: Colors.grey.shade300, width: .2),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _userAvatar(name, img, radius: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.inter(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+              // ⬇️ NEW: tapping a following opens their profile
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  if (id.isEmpty) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => NewProfileScreen(
+                            viewedUserId: id,
+                            isFollowingInitial:
+                                true, // since this is in "Following"
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.person_add_alt_1,
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "Following",
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Icon(
-                                Icons.access_time,
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                _formatAgo(createdAt),
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
                     ),
-                    if (!_isMe && id != (_userId ?? ""))
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          backgroundColor:
-                              following
-                                  ? Colors.grey.shade300
-                                  : const Color(0xFFEBB411),
-                          foregroundColor:
-                              following ? Colors.black87 : Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () => _toggleFollowUserInline(id),
-                        child: Text(
-                          following ? "Following" : "Follow",
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _userAvatar(name, img, radius: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: GoogleFonts.inter(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.person_add_alt_1,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "Following",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Icon(
+                                  Icons.access_time,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  _formatAgo(createdAt),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+                      if (!_isMe && id != (_userId ?? ""))
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            backgroundColor:
+                                following
+                                    ? Colors.grey.shade300
+                                    : const Color(0xFFEBB411),
+                            foregroundColor:
+                                following ? Colors.black87 : Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            minimumSize: const Size(0, 0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () => _toggleFollowUserInline(id),
+                          child: Text(
+                            following ? "Following" : "Follow",
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2063,7 +2133,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         child: Row(
           children: List.generate(tabs.length, (index) {
             final title = tabs[index];
-            final key = title.split(' ').first; // "Threads", "Comments", etc.
+            final key = title.split(' ').first;
             final isSelected = _selectedTab == key;
 
             return Row(
@@ -2176,7 +2246,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
-  // ---------- Badges section (optional UI – currently not displayed) ----------
+  // ---------- Badges (kept as-is) ----------
   Widget _buildBadgesSection(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
