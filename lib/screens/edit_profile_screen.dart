@@ -550,7 +550,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               _inputField(
                                 theme,
                                 _emailCtrl,
-                                "Enter your email",
+                                "Email is linked to your account",
+                                // keep validator if you want it checked on save; the value still comes from controller
                                 validator: (v) {
                                   final s = v?.trim() ?? '';
                                   if (s.isEmpty) return "Email cannot be empty";
@@ -559,7 +560,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ).hasMatch(s);
                                   return ok ? null : "Invalid email";
                                 },
+                                enabled:
+                                    false, // ⬅️ disables edits & grays it out
+                                readOnly:
+                                    true, // ⬅️ belts-and-braces (optional)
+                                showLock:
+                                    true, // ⬅️ cute lock icon on the right
                               ),
+
                               const SizedBox(height: 16),
 
                               _label("Social Links", theme),
@@ -692,19 +700,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     int maxLines = 1,
     int? minLines,
     String? Function(String?)? validator,
+    bool enabled = true,
+    bool readOnly = false,
+    bool showLock = false,
   }) {
+    final disabled = !enabled;
     return TextFormField(
       controller: controller,
       minLines: minLines,
       maxLines: maxLines,
       validator: validator,
-      style: GoogleFonts.inter(textStyle: theme.textTheme.bodyMedium),
+      enabled: enabled, // ⬅️ important
+      readOnly: readOnly, // ⬅️ optional: keep focus but block edits
+      style: GoogleFonts.inter(
+        textStyle: theme.textTheme.bodyMedium?.copyWith(
+          color:
+              disabled
+                  ? theme.textTheme.bodyMedium?.color?.withOpacity(0.6)
+                  : theme.textTheme.bodyMedium?.color,
+        ),
+      ),
       cursorColor: theme.primaryColor,
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: GoogleFonts.inter(color: Colors.grey, fontSize: 14),
         filled: true,
-        fillColor: theme.cardColor,
+        fillColor:
+            disabled ? theme.cardColor.withOpacity(0.7) : theme.cardColor,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: 10,
@@ -715,7 +737,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
-          borderSide: BorderSide(color: Colors.grey.shade400, width: 0.4),
+          borderSide: BorderSide(
+            color: disabled ? theme.dividerColor : Colors.grey.shade400,
+            width: 0.4,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
@@ -729,6 +754,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           borderRadius: BorderRadius.circular(6),
           borderSide: BorderSide(color: Colors.red.shade600, width: 0.6),
         ),
+        suffixIcon: showLock ? const Icon(Icons.lock_outline, size: 18) : null,
       ),
     );
   }
