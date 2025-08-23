@@ -195,7 +195,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       ),
     );
 
-    // Also fetch followers/followings (eager). You can make this lazy if preferred.
+    // Also fetch followers/followings (eager)
     futures.add(_fetchFollowers(targetUserId, page: 1, size: 20));
     futures.add(_fetchFollowings(targetUserId, page: 1, size: 20));
 
@@ -507,7 +507,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       if (res.statusCode != 200) throw Exception(res.body);
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      print(data);
       final list =
           (data["followers"] ??
                   data["items"] ??
@@ -608,8 +607,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       }
       setState(() {
         _isFollowing = true;
-        _vpFollower += 1;
-        _totalFollower += 1;
+        _vpFollower += 1; // if viewing someone else
+        _totalFollower += 1; // if it's me being followed
       });
 
       // refresh followers list for viewed profile if needed
@@ -1147,7 +1146,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                                 ),
                                 child: Text(
                                   categoryName,
-                                  // fixed contrast (was grey[200] which can be invisible on light bg)
                                   style: GoogleFonts.inter(
                                     fontSize: 11.5,
                                     color: Colors.grey[800],
@@ -1375,7 +1373,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   }
 
   // ---------- Likes section (liked forums) ----------
-  // ---------- Likes section (liked forums) ----------
   Widget _buildLikesSection() {
     if (_isLikesLoading) {
       return const Padding(
@@ -1490,6 +1487,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
+  // ---------- Inline follow helpers ----------
   bool _isFollowingUser(String userId) {
     // consider them "following" if they appear in current _followings
     return _followings.any((it) => _pickUserFromItem(it)["id"] == userId);
@@ -1552,55 +1550,106 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
     return Column(
       children: [
-        // Optional search box
-        // Padding(
-        //   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        //   child: TextField(
-        //     decoration: const InputDecoration(
-        //       hintText: "Filter followers",
-        //       isDense: true,
-        //       prefixIcon: Icon(Icons.search, size: 18),
-        //       border: OutlineInputBorder(),
-        //     ),
-        //     onSubmitted: (q) {
-        //       final targetUserId =
-        //           (widget.viewedUserId?.isNotEmpty ?? false)
-        //               ? widget.viewedUserId!
-        //               : (_userId ?? "");
-        //       _fetchFollowers(
-        //         targetUserId,
-        //         page: 1,
-        //         size: _followersSize,
-        //         filter: q,
-        //       );
-        //     },
-        //   ),
-        // ),
         ..._followers.map((item) {
           final u = _pickUserFromItem(item);
+          final id = u["id"]!;
           final name = u["name"]!;
           final img = u["img"]!;
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.grey.shade300,
-              backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
-              child:
-                  img.isEmpty
-                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : "U")
-                      : null,
+          final createdAt = (item["createdAt"] ?? "").toString();
+          final following = _isFollowingUser(id);
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Card(
+              elevation: 0,
+              color: Theme.of(context).cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey.shade300, width: .2),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _userAvatar(name, img, radius: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: GoogleFonts.inter(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.person,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "Follower",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Icon(
+                                Icons.access_time,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                _formatAgo(createdAt),
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!_isMe && id != (_userId ?? ""))
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          backgroundColor:
+                              following
+                                  ? Colors.grey.shade300
+                                  : const Color(0xFFEBB411),
+                          foregroundColor:
+                              following ? Colors.black87 : Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _toggleFollowUserInline(id),
+                        child: Text(
+                          following ? "Following" : "Follow",
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            title: Text(
-              name,
-              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              "Follower",
-              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              // TODO: Navigate to that user's profile
-            },
           );
         }),
 
@@ -1681,55 +1730,106 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
     return Column(
       children: [
-        // Optional search box
-        // Padding(
-        //   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        //   child: TextField(
-        //     decoration: const InputDecoration(
-        //       hintText: "Filter following",
-        //       isDense: true,
-        //       prefixIcon: Icon(Icons.search, size: 18),
-        //       border: OutlineInputBorder(),
-        //     ),
-        //     onSubmitted: (q) {
-        //       final targetUserId =
-        //           (widget.viewedUserId?.isNotEmpty ?? false)
-        //               ? widget.viewedUserId!
-        //               : (_userId ?? "");
-        //       _fetchFollowings(
-        //         targetUserId,
-        //         page: 1,
-        //         size: _followingsSize,
-        //         filter: q,
-        //       );
-        //     },
-        //   ),
-        // ),
         ..._followings.map((item) {
           final u = _pickUserFromItem(item);
+          final id = u["id"]!;
           final name = u["name"]!;
           final img = u["img"]!;
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.grey.shade300,
-              backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
-              child:
-                  img.isEmpty
-                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : "U")
-                      : null,
+          final createdAt = (item["createdAt"] ?? "").toString();
+          final following = _isFollowingUser(id); // should be true here
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Card(
+              elevation: 0,
+              color: Theme.of(context).cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey.shade300, width: .2),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _userAvatar(name, img, radius: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: GoogleFonts.inter(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.person_add_alt_1,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "Following",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Icon(
+                                Icons.access_time,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                _formatAgo(createdAt),
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!_isMe && id != (_userId ?? ""))
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          backgroundColor:
+                              following
+                                  ? Colors.grey.shade300
+                                  : const Color(0xFFEBB411),
+                          foregroundColor:
+                              following ? Colors.black87 : Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _toggleFollowUserInline(id),
+                        child: Text(
+                          following ? "Following" : "Follow",
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            title: Text(
-              name,
-              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              "Following",
-              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              // TODO: Navigate to that user's profile
-            },
           );
         }),
 
@@ -1810,6 +1910,28 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
   String _extractTextFromHtml(dynamic htmlLike) {
     final s = (htmlLike ?? "").toString();
     return s.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+  }
+
+  Widget _userAvatar(String name, String img, {double radius = 18}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final fg = isDark ? Colors.white : Colors.black87;
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: bg,
+      backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
+      child:
+          img.isEmpty
+              ? Text(
+                name.isNotEmpty ? name[0].toUpperCase() : "U",
+                style: GoogleFonts.inter(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                ),
+              )
+              : null,
+    );
   }
 
   Widget _buildTabs(ThemeData theme, List<String> tabs) {
