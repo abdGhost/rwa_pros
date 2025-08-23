@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart'; // for PaintingBinding.imageCache
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -42,6 +43,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _removeProfile = false;
   bool _removeBanner = false;
 
+  // did the user actually touch either image?
+  bool _profileTouched = false;
+  bool _bannerTouched = false;
+
+  // cache-busting
+  int _cacheBust = DateTime.now().millisecondsSinceEpoch;
+
   bool _saving = false;
   String? _error;
   String token = '';
@@ -56,7 +64,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'Website',
   ];
 
-  // Normalize any API/platform text to our dropdown labels
   static const Map<String, String> _platformCanonical = {
     'twitter': 'Twitter',
     'x': 'X',
@@ -71,7 +78,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void initState() {
     super.initState();
     _hydrateInitials();
-    _hydrateFromPrefsIfMissing(); // async fallback (no await in initState)
+    _hydrateFromPrefsIfMissing();
     _checkLoginStatus();
   }
 
@@ -101,7 +108,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (savedEmail.isNotEmpty) _emailCtrl.text = savedEmail;
     }
 
-    // Restore saved links if widget didn't pass any (or only a single blank row)
     final savedLinksJson = prefs.getString('links');
     if (savedLinksJson != null && savedLinksJson.isNotEmpty) {
       final decoded = jsonDecode(savedLinksJson);
@@ -126,7 +132,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     }
 
-    // Also restore images if the parent didn't pass them
     if ((_existingProfileUrl ?? '').isEmpty) {
       _existingProfileUrl = prefs.getString('profileImage') ?? '';
       setState(() {});
@@ -137,9 +142,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  /// Extract userId from JWT payload if needed.
+  String? _extractUserIdFromJwt(String? jwt) {
+    if (jwt == null || jwt.isEmpty) return null;
+    try {
+      final parts = jwt.split('.');
+      if (parts.length != 3) return null;
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
+      final map = jsonDecode(payload) as Map<String, dynamic>;
+      return (map['id'] ?? map['_id'] ?? map['userId'])?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() => token = prefs.getString('token') ?? '');
+    final t = prefs.getString('token') ?? '';
+    String? uid = prefs.getString('userId');
+
+    // derive userId from JWT if missing
+    if (uid == null || uid.isEmpty) {
+      uid = _extractUserIdFromJwt(t);
+      if (uid != null && uid.isNotEmpty) {
+        await prefs.setString('userId', uid);
+      }
+    }
+
+    setState(() => token = t);
   }
 
   @override
@@ -149,7 +181,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  // Only add Authorization; MultipartRequest will set proper content-type
   Future<Map<String, String>> _authHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final jwt = prefs.getString('token');
@@ -167,9 +198,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (isProfile) {
           _pickedProfileFile = File(picked.path);
           _removeProfile = false;
+          _profileTouched = true;
         } else {
           _pickedBannerFile = File(picked.path);
           _removeBanner = false;
+          _bannerTouched = true;
         }
       });
     }
@@ -181,10 +214,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _pickedProfileFile = null;
         _existingProfileUrl = null;
         _removeProfile = true;
+        _profileTouched = true;
       } else {
         _pickedBannerFile = null;
         _existingBannerUrl = null;
         _removeBanner = true;
+        _bannerTouched = true;
       }
     });
   }
@@ -194,6 +229,64 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (t.isEmpty) return t;
     final hasScheme = RegExp(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://').hasMatch(t);
     return hasScheme ? t : 'https://$t';
+  }
+
+  /// return url with cache-busting query param
+  String? _bustUrl(String? url) {
+    if (url == null || url.isEmpty) return url;
+    final separator = url.contains('?') ? '&' : '?';
+    return '$url${separator}v=$_cacheBust';
+  }
+
+  /// Fetch canonical user after update via /api/users/detail/<userId>
+  Future<Map<String, dynamic>?> _fetchFreshUser() async {
+    final headers = await _authHeaders();
+    final prefs = await SharedPreferences.getInstance();
+
+    String? userId = prefs.getString('userId');
+    if (userId == null || userId.isEmpty) {
+      userId = _extractUserIdFromJwt(prefs.getString('token'));
+      if (userId != null && userId.isNotEmpty) {
+        await prefs.setString('userId', userId);
+      }
+    }
+    if (userId == null || userId.isEmpty) return null;
+
+    final url =
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId';
+
+    try {
+      final res = await http.get(Uri.parse(url), headers: headers);
+      debugPrint('GET $url → ${res.statusCode} ${res.body}');
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final body = jsonDecode(res.body);
+        if (body is Map && body['status'] == true) {
+          final detail = body['userDetail'];
+          if (detail is Map) {
+            // normalize keys for the rest of the code
+            final bannerFromServer =
+                detail['bannerImg'] ??
+                detail['emabannerImg']; // ← typo tolerant
+            return {
+              'userName': detail['userName'],
+              'name': detail['userName'],
+              'email': detail['email'],
+              'profileImg': detail['profileImg'],
+              'profileImage': detail['profileImg'],
+              'bannerImg': bannerFromServer,
+              'bannerImage': bannerFromServer,
+              'link': detail['link'],
+              'links': detail['link'],
+              '_raw': detail,
+              '_stat': body['stat'],
+            };
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('fetchFreshUser error: $e');
+    }
+    return null;
   }
 
   Future<void> _save() async {
@@ -224,26 +317,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final req = http.MultipartRequest("PUT", uri);
       req.headers.addAll(await _authHeaders());
 
-      // Debug logs
-      print("=== EDIT PROFILE SAVE START ===");
-      print("Request URL: $uri");
-      print("Headers: ${req.headers}");
-      print("UserName: ${_nameCtrl.text.trim()}");
-      print("Email: ${_emailCtrl.text.trim()}");
-      print("Remove Banner: $_removeBanner");
-      print("Remove Profile: $_removeProfile");
-      print("Links: $links");
+      debugPrint("=== EDIT PROFILE SAVE START ===");
+      debugPrint("Request URL: $uri");
+      debugPrint("Headers: ${req.headers}");
+      debugPrint("UserName: ${_nameCtrl.text.trim()}");
+      debugPrint("Email: ${_emailCtrl.text.trim()}");
+      debugPrint("Remove Banner: $_removeBanner");
+      debugPrint("Remove Profile: $_removeProfile");
+      debugPrint("Links: $links");
 
-      // fields
       req.fields['userName'] = _nameCtrl.text.trim();
       req.fields['email'] = _emailCtrl.text.trim();
       req.fields['removeBannerImg'] = _removeBanner ? "true" : "false";
       req.fields['removeProfileImg'] = _removeProfile ? "true" : "false";
       req.fields['link'] = jsonEncode(links);
 
-      // files (only if changed)
       if (_pickedProfileFile != null) {
-        print("Attaching profile image: ${_pickedProfileFile!.path}");
+        debugPrint("Attaching profile image: ${_pickedProfileFile!.path}");
         req.files.add(
           await http.MultipartFile.fromPath(
             'profileImg',
@@ -252,7 +342,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
       }
       if (_pickedBannerFile != null) {
-        print("Attaching banner image: ${_pickedBannerFile!.path}");
+        debugPrint("Attaching banner image: ${_pickedBannerFile!.path}");
         req.files.add(
           await http.MultipartFile.fromPath(
             'bannerImg',
@@ -262,88 +352,124 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       final streamed = await req.send();
-      print("Request sent, awaiting response...");
+      debugPrint("Request sent, awaiting response...");
 
       final res = await http.Response.fromStream(streamed);
-      print("Response Status: ${res.statusCode}");
-      print("Response Body: ${res.body}");
+      debugPrint("Response Status: ${res.statusCode}");
+      debugPrint("Response Body: ${res.body}");
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception("HTTP ${res.statusCode}: ${res.body}");
       }
 
-      final payload = jsonDecode(res.body);
-      if (payload is! Map) {
-        throw Exception("Unexpected response shape");
-      }
-      final payloadMap = Map<String, dynamic>.from(payload);
-      print("Decoded Payload: $payloadMap");
-
-      if (payloadMap['status'] != true) {
-        throw Exception(payloadMap['message'] ?? 'Unknown error');
-      }
-
-      // --- SAFE PARSE OF OPTIONAL `data` ---
-      String? serverProfileUrl;
-      String? serverBannerUrl;
-      dynamic serverLinks;
-
-      final rawData = payloadMap['data'];
-      if (rawData is Map) {
-        final data = Map<String, dynamic>.from(rawData);
-        serverProfileUrl =
-            (data['profileImg'] ?? data['profileImage']) as String?;
-        serverBannerUrl = (data['bannerImg'] ?? data['bannerImage']) as String?;
-        serverLinks = data['link'] ?? data['links'];
-      } else {
-        serverProfileUrl = null;
-        serverBannerUrl = null;
-        serverLinks = null;
-      }
-
-      print("Parsed serverProfileUrl: $serverProfileUrl");
-      print("Parsed serverBannerUrl: $serverBannerUrl");
-      print("Parsed serverLinks: $serverLinks");
-
-      // cache for instant UI refresh
+      // Always refetch after update
+      final fresh = await _fetchFreshUser();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('name', _nameCtrl.text.trim());
-      await prefs.setString('email', _emailCtrl.text.trim());
-      await prefs.setString('links', jsonEncode(links));
 
-      await prefs.setString(
-        'profileImage',
-        _removeProfile
-            ? ''
-            : (serverProfileUrl ??
-                (_pickedProfileFile != null
-                    ? (_existingProfileUrl ?? '')
-                    : (_existingProfileUrl ?? ''))),
-      );
+      // Bump cache-buster once per successful save (forces new URL for Image.network)
+      _cacheBust = DateTime.now().millisecondsSinceEpoch;
 
-      await prefs.setString(
-        'bannerImage',
-        _removeBanner
-            ? ''
-            : (serverBannerUrl ??
-                (_pickedBannerFile != null
-                    ? (_existingBannerUrl ?? '')
-                    : (_existingBannerUrl ?? ''))),
-      );
+      if (fresh != null) {
+        final userName =
+            (fresh['userName'] ?? fresh['name'] ?? _nameCtrl.text).toString();
+        final email = (fresh['email'] ?? _emailCtrl.text).toString();
+        final profileUrlServer =
+            (fresh['profileImg'] ?? fresh['profileImage'] ?? '')?.toString() ??
+            '';
+        final bannerUrlServer =
+            (fresh['bannerImg'] ?? fresh['bannerImage'] ?? '')?.toString() ??
+            '';
+        final serverLinks = (fresh['link'] ?? fresh['links']);
 
-      // If server sends back normalized links, prefer those (optional)
-      if (serverLinks is List) {
-        await prefs.setString('links', jsonEncode(serverLinks));
+        // Decide final URLs using "touch guards"
+        String finalProfileUrl;
+        String finalBannerUrl;
+
+        if (_removeProfile) {
+          finalProfileUrl = '';
+        } else if (_profileTouched) {
+          // user changed/selected profile → accept server profile
+          finalProfileUrl = profileUrlServer;
+        } else {
+          // user did NOT touch profile → keep what we had
+          finalProfileUrl = _existingProfileUrl ?? profileUrlServer;
+        }
+
+        if (_removeBanner) {
+          finalBannerUrl = '';
+        } else if (_bannerTouched) {
+          // user changed/selected banner → accept server banner
+          finalBannerUrl = bannerUrlServer;
+        } else {
+          // user did NOT touch banner → keep what we had, ignore accidental server change
+          finalBannerUrl = _existingBannerUrl ?? bannerUrlServer;
+        }
+
+        // Persist
+        await prefs.setString('name', userName);
+        await prefs.setString('email', email);
+        await prefs.setString('profileImage', finalProfileUrl);
+        await prefs.setString('bannerImage', finalBannerUrl);
+
+        if (serverLinks is List) {
+          await prefs.setString('links', jsonEncode(serverLinks));
+        } else {
+          await prefs.setString('links', jsonEncode(links));
+        }
+
+        // Clear Flutter's in-memory image cache to avoid stale bitmaps
+        try {
+          PaintingBinding.instance.imageCache.clear();
+          PaintingBinding.instance.imageCache.clearLiveImages();
+        } catch (_) {}
+
+        setState(() {
+          _existingProfileUrl = finalProfileUrl;
+          _existingBannerUrl = finalBannerUrl;
+          _pickedProfileFile = null;
+          _pickedBannerFile = null;
+          _removeProfile = false;
+          _removeBanner = false;
+          _profileTouched = false;
+          _bannerTouched = false;
+        });
+      } else {
+        // Couldn’t refetch. Still update stable fields locally and bust cache.
+        await prefs.setString('name', _nameCtrl.text.trim());
+        await prefs.setString('email', _emailCtrl.text.trim());
+        await prefs.setString('links', jsonEncode(links));
+
+        if (_removeProfile) await prefs.setString('profileImage', '');
+        if (_removeBanner) await prefs.setString('bannerImage', '');
+
+        try {
+          PaintingBinding.instance.imageCache.clear();
+          PaintingBinding.instance.imageCache.clearLiveImages();
+        } catch (_) {}
+
+        setState(() {
+          _pickedProfileFile = null;
+          _pickedBannerFile = null;
+          _removeProfile = false;
+          _removeBanner = false;
+          _profileTouched = false;
+          _bannerTouched = false;
+        });
       }
 
-      print("=== EDIT PROFILE SAVE SUCCESS ===");
+      debugPrint("=== EDIT PROFILE SAVE SUCCESS ===");
 
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e, st) {
-      print("Save Error: $e");
-      print(st);
-      setState(() => _error = e.toString());
+      debugPrint("Save Error: $e");
+      debugPrint("$st");
+      if (mounted) {
+        setState(() => _error = e.toString());
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -381,7 +507,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Banner block
                               _label("Banner Image", theme),
                               const SizedBox(height: 6),
                               _imagePickerBlock(
@@ -394,7 +519,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                               const SizedBox(height: 16),
 
-                              // Avatar block
                               _label("Profile Image", theme),
                               const SizedBox(height: 6),
                               _imagePickerBlock(
@@ -457,7 +581,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                     ),
 
-                    // bottom primary button
                     Container(
                       padding: const EdgeInsets.all(16),
                       width: double.infinity,
@@ -671,10 +794,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     } else if ((existingUrl ?? '').isNotEmpty) {
       preview = Image.network(
-        existingUrl!,
+        _bustUrl(existingUrl!)!,
+        gaplessPlayback: true,
         height: 90,
         width: 90,
         fit: BoxFit.cover,
+        headers: const {'Cache-Control': 'no-cache'},
+        key: ValueKey(_bustUrl(existingUrl!)),
       );
     } else {
       preview = Container(
@@ -712,7 +838,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             child: Row(
               children: [
-                // Dropdown (no-wrap + small fonts)
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<String>(
@@ -740,7 +865,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               style: const TextStyle(fontSize: 12),
                             )
                             : null,
-                    // Make the selected value ALWAYS single-line with ellipsis
                     selectedItemBuilder:
                         (context) =>
                             _platforms
@@ -777,8 +901,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                // URL (small fonts)
                 Expanded(
                   flex: 7,
                   child: TextFormField(
@@ -805,11 +927,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     },
                   ),
                 ),
-
                 const SizedBox(width: 8),
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  iconSize: 18, // a bit smaller
+                  iconSize: 18,
                   constraints: const BoxConstraints.tightFor(
                     width: 32,
                     height: 32,
@@ -829,7 +950,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           );
         }),
-
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
