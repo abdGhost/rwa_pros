@@ -14,10 +14,14 @@ class NewProfileScreen extends StatefulWidget {
   /// Optional initial follow state when viewing someone else.
   final bool isFollowingInitial;
 
+  /// Optional: pass a forumId to filter the Comments tab to a specific forum.
+  final String? filterForumIdForComments;
+
   const NewProfileScreen({
     super.key,
     this.viewedUserId,
     this.isFollowingInitial = false,
+    this.filterForumIdForComments,
   });
 
   @override
@@ -79,26 +83,22 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     "VIP": [],
   };
 
-  // Demo content (keep your preview lists)
-  final List<Map<String, String>> threads = [
-    {"title": "RWAs You Personally Hold?", "author": "Michael"},
-    {"title": "Which Blockchain Will Win the RWA Race?", "author": "Michael"},
-    {"title": "Beginner’s Guide: Explain RWAs Like I’m 5", "author": "Michael"},
-  ];
-  final List<Map<String, String>> comments = [
-    {
-      "comment": "This guide helped me understand RWAs, thank you!",
-      "thread": "Beginner’s Guide: RWAs",
-    },
-    {
-      "comment": "I think Ethereum still leads the race!",
-      "thread": "Which Blockchain Will Win?",
-    },
-  ];
-  final List<Map<String, String>> likes = [
-    {"liked": "RWAs You Personally Hold?"},
-    {"liked": "Explain RWAs Like I’m 5"},
-  ];
+  // ====== Forums created by target user ======
+  bool _isForumsLoading = false;
+  String? _forumsError;
+  List<Map<String, dynamic>> _createdForums = [];
+  int _createdForumsTotal = 0;
+
+  // ====== Forums liked by target user ======
+  bool _isLikesLoading = false;
+  String? _likesError;
+  List<Map<String, dynamic>> _likedForums = [];
+  int _likedForumsTotal = 0;
+
+  // ====== Comments by target user ======
+  bool _isCommentsLoading = false;
+  String? _commentsError;
+  List<Map<String, dynamic>> _userComments = [];
 
   @override
   void initState() {
@@ -150,26 +150,45 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       _totalViewReceived = loadedViewReceived;
     });
 
-    // If viewing someone else, fetch their details + badges
+    // Determine target user (self or viewed)
+    final targetUserId =
+        (widget.viewedUserId != null && widget.viewedUserId!.isNotEmpty)
+            ? widget.viewedUserId!
+            : (_userId ?? "");
+
+    // For viewed profiles, pull full detail + badges
+    final futures = <Future>[];
     if (!_isMe && (widget.viewedUserId ?? "").isNotEmpty) {
-      await Future.wait([
-        _fetchViewedUserDetail(widget.viewedUserId!),
-        _fetchViewedUserBadges(widget.viewedUserId!),
-      ]);
+      futures.add(_fetchViewedUserDetail(widget.viewedUserId!));
+      futures.add(_fetchViewedUserBadges(widget.viewedUserId!));
     }
+
+    // Always fetch created + liked forums + comments for the target user
+    futures.add(_fetchUserForums(targetUserId, page: 1, size: 20));
+    futures.add(_fetchUserLikedForums(targetUserId, page: 1, size: 20));
+    futures.add(
+      _fetchUserComments(
+        targetUserId,
+        forumId: widget.filterForumIdForComments,
+      ),
+    );
+
+    await Future.wait(futures);
 
     // Debug (optional)
     debugPrint("===== 🔐 Stored User Profile (SharedPreferences) =====");
     debugPrint("Logged-in user ID: $_userId");
     debugPrint("Viewing profile ID : ${widget.viewedUserId ?? '(self)'}");
+    debugPrint("Target user for lists: $targetUserId");
+    debugPrint(
+      "Comments filter forumId: ${widget.filterForumIdForComments ?? '(none)'}",
+    );
     debugPrint("======================================================");
   }
 
   bool get _isMe {
-    // If no viewedUserId provided, treat as my profile
     final viewedId = widget.viewedUserId;
     if (viewedId == null || viewedId.isEmpty) return true;
-    // Compare with logged-in id from prefs
     return viewedId == (_userId ?? "");
   }
 
@@ -252,7 +271,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     setState(() {
       _isBadgesLoading = true;
       _badgesError = null;
-      // clear previous
       _viewedBadges.updateAll((key, value) => []);
     });
 
@@ -322,13 +340,165 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
+  // -------- Forums created by user ----------
+  Future<void> _fetchUserForums(
+    String userId, {
+    int page = 1,
+    int size = 20,
+    String? categoryId,
+  }) async {
+    setState(() {
+      _isForumsLoading = true;
+      _forumsError = null;
+      _createdForums = [];
+      _createdForumsTotal = 0;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jwt = prefs.getString("token");
+
+      final String qCategory =
+          (categoryId != null && categoryId.isNotEmpty) ? categoryId : "";
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/forum/user/$userId"
+        "?categoryId=$qCategory&page=$page&size=$size",
+      );
+
+      final res = await http.get(
+        uri,
+        headers: {
+          "Content-Type": "application/json",
+          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
+        },
+      );
+
+      if (res.statusCode != 200) throw Exception(res.body);
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data["status"] == true) {
+        final forums = (data["forums"] as List?) ?? [];
+        setState(() {
+          _createdForums =
+              forums
+                  .map<Map<String, dynamic>>((f) => f as Map<String, dynamic>)
+                  .toList();
+          _createdForumsTotal = (data["total"] ?? forums.length) as int;
+        });
+      } else {
+        throw Exception("status != true");
+      }
+    } catch (e) {
+      setState(() => _forumsError = "Failed to load threads");
+      debugPrint("❌ fetchUserForums error: $e");
+    } finally {
+      if (mounted) setState(() => _isForumsLoading = false);
+    }
+  }
+
+  // -------- Forums liked by user ----------
+  Future<void> _fetchUserLikedForums(
+    String userId, {
+    int page = 1,
+    int size = 20,
+  }) async {
+    setState(() {
+      _isLikesLoading = true;
+      _likesError = null;
+      _likedForums = [];
+      _likedForumsTotal = 0;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jwt = prefs.getString("token");
+
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/forum/likes/user/$userId"
+        "?page=$page&size=$size",
+      );
+
+      final res = await http.get(
+        uri,
+        headers: {
+          "Content-Type": "application/json",
+          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
+        },
+      );
+
+      if (res.statusCode != 200) throw Exception(res.body);
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data["status"] == true) {
+        final likes = (data["likedForum"] as List?) ?? [];
+        setState(() {
+          _likedForums =
+              likes
+                  .map<Map<String, dynamic>>((f) => f as Map<String, dynamic>)
+                  .toList();
+          _likedForumsTotal = (data["total"] ?? likes.length) as int;
+        });
+      } else {
+        throw Exception("status != true");
+      }
+    } catch (e) {
+      setState(() => _likesError = "Failed to load liked forums");
+      debugPrint("❌ fetchUserLikedForums error: $e");
+    } finally {
+      if (mounted) setState(() => _isLikesLoading = false);
+    }
+  }
+
+  // -------- Comments by user ----------
+  Future<void> _fetchUserComments(String userId, {String? forumId}) async {
+    setState(() {
+      _isCommentsLoading = true;
+      _commentsError = null;
+      _userComments = [];
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jwt = prefs.getString("token");
+
+      final qForum =
+          (forumId != null && forumId.isNotEmpty) ? "?forumId=$forumId" : "";
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/forum/comment/user/$userId$qForum",
+      );
+
+      final res = await http.get(
+        uri,
+        headers: {
+          "Content-Type": "application/json",
+          if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
+        },
+      );
+
+      if (res.statusCode != 200) throw Exception(res.body);
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data["status"] == true) {
+        final list = (data["userComments"] as List?) ?? [];
+        setState(() {
+          _userComments =
+              list
+                  .map<Map<String, dynamic>>((c) => c as Map<String, dynamic>)
+                  .toList();
+        });
+      } else {
+        throw Exception("status != true");
+      }
+    } catch (e) {
+      setState(() => _commentsError = "Failed to load comments");
+      debugPrint("❌ fetchUserComments error: $e");
+    } finally {
+      if (mounted) setState(() => _isCommentsLoading = false);
+    }
+  }
+
   Future<void> _toggleFollow() async {
     // TODO: call your follow/unfollow API here.
-    // Example:
-    // final token = (await SharedPreferences.getInstance()).getString('token');
-    // await http.post(Uri.parse(".../follow"),
-    //   headers: {"Authorization":"Bearer $token"},
-    //   body: {"targetId": widget.viewedUserId});
     setState(() => _isFollowing = !_isFollowing);
     debugPrint(_isFollowing ? "✅ Now following" : "❌ Unfollowed");
   }
@@ -372,6 +542,23 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     }
   }
 
+  String _formatAgo(String? iso) {
+    if (iso == null || iso.isEmpty) return "recent";
+    try {
+      final dt = DateTime.parse(iso);
+      final diff = DateTime.now().toUtc().difference(dt.toUtc());
+      if (diff.inSeconds < 60) return "${diff.inSeconds}s ago";
+      if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
+      if (diff.inHours < 24) return "${diff.inHours}h ago";
+      if (diff.inDays < 7) return "${diff.inDays}d ago";
+      // fallback to date
+      return "${dt.day.toString().padLeft(2, '0')}/"
+          "${dt.month.toString().padLeft(2, '0')}/${dt.year}";
+    } catch (_) {
+      return "recent";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -394,8 +581,15 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
     // Stats for tabs
     final tThreads = useViewed ? _vpThreadPosted : _totalThreadPosted;
-    final tComments = useViewed ? _vpCommentGiven : _totalCommentGiven;
-    final tLikes = useViewed ? _vpLikeReceived : _totalLikeReceived;
+    final tComments =
+        _userComments.isNotEmpty
+            ? _userComments.length
+            : (useViewed ? _vpCommentGiven : _totalCommentGiven);
+    final likesCount =
+        _likedForumsTotal > 0
+            ? _likedForumsTotal
+            : (useViewed ? _vpLikeReceived : _totalLikeReceived);
+    final tLikes = likesCount;
     final tFollowers = useViewed ? _vpFollower : _totalFollower;
     final tFollowing = useViewed ? _vpFollowing : _totalFollowing;
 
@@ -582,23 +776,14 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                       _buildLinksRow(_vpLinks, Theme.of(context)),
                     ],
 
-                    // // Badges (viewing others)
-                    // if (!_isMe) _buildBadgesSection(Theme.of(context)),
                     const SizedBox(height: 16),
                     _buildTabs(Theme.of(context), tabs),
                     const SizedBox(height: 8),
 
-                    // Tab content (demo)
-                    if (_selectedTab == "Threads")
-                      ...threads.map(
-                        (t) => _buildThreadCard(t['title']!, t['author']!),
-                      ),
-                    if (_selectedTab == "Comments")
-                      ...comments.map(
-                        (c) => _buildCommentCard(c['comment']!, c['thread']!),
-                      ),
-                    if (_selectedTab == "Likes")
-                      ...likes.map((l) => _buildLikeCard(l['liked']!)),
+                    // ----------------- Tab content -----------------
+                    if (_selectedTab == "Threads") _buildThreadsSection(),
+                    if (_selectedTab == "Comments") _buildCommentsSection(),
+                    if (_selectedTab == "Likes") _buildLikesSection(),
                     if (_selectedTab == "Followers")
                       Padding(
                         padding: const EdgeInsets.all(16),
@@ -641,134 +826,401 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
-  // ---------- Badges section ----------
-  Widget _buildBadgesSection(ThemeData theme) {
-    final isDark = theme.brightness == Brightness.dark;
-
-    // If still loading
-    if (_isBadgesLoading) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 12.0),
-        child: Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(width: 8),
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                "Loading badges...",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-            ],
-          ),
-        ),
+  // ---------- Threads section (created forums) ----------
+  // ---------- Threads section (created forums) ----------
+  Widget _buildThreadsSection() {
+    if (_isForumsLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
-
-    // If error
-    if (_badgesError != null) {
+    if (_forumsError != null) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(16),
         child: Text(
-          _badgesError!,
-          style: GoogleFonts.inter(fontSize: 12, color: Colors.redAccent),
-          textAlign: TextAlign.center,
+          _forumsError!,
+          style: GoogleFonts.inter(color: Colors.redAccent),
+        ),
+      );
+    }
+    if (_createdForums.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          "No threads yet",
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
         ),
       );
     }
 
-    // Build rows per category if any items exist
-    final List<Widget> rows = [];
-    _viewedBadges.forEach((category, items) {
-      if (items.isEmpty) return;
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              category,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-      );
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: items.map((b) => _buildBadgeChip(b, isDark)).toList(),
-          ),
-        ),
-      );
-    });
-
-    if (rows.isEmpty) {
-      // No badges present
-      return const SizedBox.shrink();
+    int _countReactions(dynamic r) {
+      if (r == null) return 0;
+      if (r is Map) {
+        try {
+          return r.values
+              .map((v) => (v is num) ? v.toInt() : 0)
+              .fold(0, (a, b) => a + b);
+        } catch (_) {
+          return 0;
+        }
+      }
+      return 0;
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [const SizedBox(height: 8), ...rows, const SizedBox(height: 4)],
+      children:
+          _createdForums.map((f) {
+            final titleRaw = (f["title"] ?? "").toString();
+            final title =
+                titleRaw.trim().isEmpty
+                    ? _extractTextFromHtml(f["text"] ?? "")
+                    : titleRaw.trim();
+
+            final textExcerpt = _extractTextFromHtml(f["text"] ?? "");
+            final createdAt = f["createdAt"]?.toString();
+            final author = f["userId"]?["userName"]?.toString() ?? "";
+            final categoryName = f["categoryId"]?["name"]?.toString() ?? "";
+            final commentsCount =
+                (f["commentsCount"] is num)
+                    ? (f["commentsCount"] as num).toInt()
+                    : 0;
+            final upvotes =
+                (f["upvotes"] is num) ? (f["upvotes"] as num).toInt() : 0;
+            final reactionsCount = _countReactions(f["reactions"]);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Card(
+                elevation: 0,
+                color: Theme.of(context).cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: Colors.grey.shade300, width: .2),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    // TODO: Navigate to ForumThreadScreen with f['_id']
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header: title + time
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.forum,
+                              size: 16,
+                              color: Color(0xFFEBB411),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                title.isEmpty ? "(untitled)" : title,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.access_time,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              _formatAgo(createdAt),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Meta row: author • category
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            if (author.isNotEmpty)
+                              Flexible(
+                                child: Text(
+                                  "by $author",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            if (author.isNotEmpty && categoryName.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 6),
+                                child: Text(
+                                  "•",
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ),
+                            if (categoryName.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  categoryName,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11.5,
+                                    color: Colors.grey[200],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        // Body excerpt (if any text)
+                        if (textExcerpt.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            textExcerpt,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 13.0,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
     );
   }
 
-  Widget _buildBadgeChip(String label, bool isDark) {
-    // you can tune colors per label or by category if you want
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-        border: Border.all(
-          color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+  // ---------- Comments section (live API) ----------
+  Widget _buildCommentsSection() {
+    if (_isCommentsLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_commentsError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _commentsError!,
+          style: GoogleFonts.inter(color: Colors.redAccent),
         ),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-      ),
+      );
+    }
+    if (_userComments.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          "No comments yet",
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Column(
+      children:
+          _userComments.map((c) {
+            final text = (c["text"] ?? "").toString();
+            final forum = c["forumId"] as Map<String, dynamic>?;
+            final forumTitle = forum?["title"]?.toString() ?? "(forum)";
+            final createdAt = c["createdAt"]?.toString();
+            final quoted =
+                c["quotedCommentedId"] as Map<String, dynamic>?; // may be null
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Card(
+                elevation: 0,
+                color: Theme.of(context).cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: Colors.grey.shade300, width: .2),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header: forum title + time
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.forum,
+                            size: 16,
+                            color: Color(0xFFEBB411),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              forumTitle.trim().isEmpty
+                                  ? "(forum)"
+                                  : forumTitle,
+                              style: GoogleFonts.inter(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.access_time,
+                            size: 14,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            _formatAgo(createdAt),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Quoted comment (if any)
+                      if (quoted != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.08),
+                            border: Border(
+                              left: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 3,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (quoted["username"] != null &&
+                                        quoted["username"]
+                                            .toString()
+                                            .isNotEmpty)
+                                    ? "Quoted ${quoted["username"]}"
+                                    : "Quoted comment",
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                (quoted["text"] ?? "").toString(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
+                      // User's comment
+                      Text(text, style: GoogleFonts.inter(fontSize: 13.5)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
     );
   }
 
-  Widget _buildTierChip(String label, bool isDark) {
-    final Map<String, Color> colorMap = {
-      "Explorer": Colors.grey,
-      "Contributor": Colors.blue,
-      "Veteran": Colors.green,
-      "Pro": const Color(0xFFEBB411),
-    };
-    final color = colorMap[label] ?? Colors.black;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color,
-        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
+  // ---------- Likes section (liked forums) ----------
+  Widget _buildLikesSection() {
+    if (_isLikesLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_likesError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _likesError!,
+          style: GoogleFonts.inter(color: Colors.redAccent),
         ),
-      ),
+      );
+    }
+    if (_likedForums.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          "No likes yet",
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Column(
+      children:
+          _likedForums.map((l) {
+            final forum = l["forumId"] as Map<String, dynamic>?;
+            final title = forum?["title"]?.toString() ?? "";
+            final author = forum?["userId"]?["userName"]?.toString() ?? "";
+            final t = title.isNotEmpty ? title : "(untitled)";
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              leading: const Icon(Icons.thumb_up, color: Colors.green),
+              title: Text('Liked "$t"', style: GoogleFonts.inter(fontSize: 14)),
+              subtitle:
+                  author.isEmpty
+                      ? null
+                      : Text(
+                        'by $author',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+              onTap: () {
+                // TODO: Navigate to ForumThreadScreen with forum['_id']
+              },
+            );
+          }).toList(),
     );
+  }
+
+  // ---------- Helpers ----------
+  String _extractTextFromHtml(dynamic htmlLike) {
+    final s = (htmlLike ?? "").toString();
+    // very light HTML tag stripper
+    return s.replaceAll(RegExp(r'<[^>]*>'), '').trim();
   }
 
   Widget _buildTabs(ThemeData theme, List<String> tabs) {
@@ -829,121 +1281,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     );
   }
 
-  Widget _buildThreadCard(String title, String author) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.forum, color: Color(0xFFEBB411)),
-      title: Text(
-        title,
-        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-      ),
-      subtitle: Row(
-        children: [
-          Text(
-            "by $author",
-            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.access_time, size: 14, color: Colors.grey),
-          Text(
-            " 4 hours ago",
-            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
-          ),
-        ],
-      ),
-      onTap: () {},
-    );
-  }
-
-  Widget _buildCommentCard(String comment, String threadTitle) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.comment, color: Colors.blue),
-      title: Text(comment, style: GoogleFonts.inter(fontSize: 14)),
-      subtitle: Text(
-        'on "$threadTitle"',
-        style: GoogleFonts.inter(fontSize: 13, color: Colors.grey),
-      ),
-    );
-  }
-
-  Widget _buildLikeCard(String likedThread) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.thumb_up, color: Colors.green),
-      title: Text(
-        'Liked "$likedThread"',
-        style: GoogleFonts.inter(fontSize: 14),
-      ),
-    );
-  }
-
   // ---------- Social links row ----------
-  // Widget _buildLinksRow(List<Map<String, String>> links, ThemeData theme) {
-  //   return Padding(
-  //     padding: const EdgeInsets.symmetric(horizontal: 16),
-  //     child: Wrap(
-  //       spacing: 8,
-  //       runSpacing: 8,
-  //       children:
-  //           links.map((m) {
-  //             final platform = m["platform"]!;
-  //             String url = m["url"]!;
-  //             // prepend scheme if missing
-  //             if (!url.startsWith("http://") && !url.startsWith("https://")) {
-  //               url = "https://$url";
-  //             }
-  //             final icon = _iconForPlatform(platform);
-  //             return InkWell(
-  //               onTap: () async {
-  //                 final uri = Uri.parse(url);
-  //                 if (await canLaunchUrl(uri)) {
-  //                   await launchUrl(uri, mode: LaunchMode.externalApplication);
-  //                 } else {
-  //                   ScaffoldMessenger.of(
-  //                     context,
-  //                   ).showSnackBar(SnackBar(content: Text("Cannot open $url")));
-  //                 }
-  //               },
-  //               child: Container(
-  //                 padding: const EdgeInsets.symmetric(
-  //                   horizontal: 10,
-  //                   vertical: 6,
-  //                 ),
-  //                 decoration: BoxDecoration(
-  //                   color:
-  //                       theme.brightness == Brightness.dark
-  //                           ? Colors.grey.shade800
-  //                           : Colors.grey.shade200,
-  //                   borderRadius: BorderRadius.circular(6),
-  //                   border: Border.all(
-  //                     color:
-  //                         theme.brightness == Brightness.dark
-  //                             ? Colors.grey.shade700
-  //                             : Colors.grey.shade300,
-  //                   ),
-  //                 ),
-  //                 child: Row(
-  //                   mainAxisSize: MainAxisSize.min,
-  //                   children: [
-  //                     Icon(icon, size: 14),
-  //                     const SizedBox(width: 6),
-  //                     Text(
-  //                       platform,
-  //                       style: GoogleFonts.inter(
-  //                         fontSize: 12,
-  //                         fontWeight: FontWeight.w600,
-  //                       ),
-  //                     ),
-  //                   ],
-  //                 ),
-  //               ),
-  //             );
-  //           }).toList(),
-  //     ),
-  //   );
-  // }
-
   Widget _buildLinksRow(List<Map<String, String>> links, ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
@@ -967,6 +1305,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                   if (await canLaunchUrl(uri)) {
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
                   } else {
+                    if (!mounted) return;
                     ScaffoldMessenger.of(
                       context,
                     ).showSnackBar(SnackBar(content: Text("Cannot open $url")));
@@ -1004,5 +1343,128 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       default:
         return FontAwesomeIcons.link;
     }
+  }
+
+  // ---------- Badges section (optional UI – currently not displayed) ----------
+  Widget _buildBadgesSection(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (_isBadgesLoading) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12.0),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(width: 8),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                "Loading badges...",
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_badgesError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text(
+          _badgesError!,
+          style: GoogleFonts.inter(fontSize: 12, color: Colors.redAccent),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    final List<Widget> rows = [];
+    _viewedBadges.forEach((category, items) {
+      if (items.isEmpty) return;
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              category,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map((b) => _buildBadgeChip(b, isDark)).toList(),
+          ),
+        ),
+      );
+    });
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [const SizedBox(height: 8), ...rows, const SizedBox(height: 4)],
+    );
+  }
+
+  Widget _buildBadgeChip(String label, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        border: Border.all(
+          color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildTierChip(String label, bool isDark) {
+    final Map<String, Color> colorMap = {
+      "Explorer": Colors.grey,
+      "Contributor": Colors.blue,
+      "Veteran": Colors.green,
+      "Pro": const Color(0xFFEBB411),
+    };
+    final color = colorMap[label] ?? Colors.black;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+    );
   }
 }
