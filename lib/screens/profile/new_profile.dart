@@ -996,7 +996,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               ? const Center(
                 child: Padding(
                   padding: EdgeInsets.only(top: 24.0),
-                  child: CircularProgressIndicator(),
+                  child: CircularProgressIndicator(color: Color(0xFFEBB411)),
                 ),
               )
               : SingleChildScrollView(
@@ -1169,8 +1169,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
 
     if (_isForumsLoading) {
       return const Padding(
-        padding: EdgeInsets.only(top: 12),
-        child: Center(child: CircularProgressIndicator()),
+        padding: EdgeInsets.only(top: 40),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+        ),
       );
     }
     if (_forumsError != null) {
@@ -1409,7 +1411,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     if (_isCommentsLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+        ),
       );
     }
     if (_commentsError != null) {
@@ -1579,7 +1583,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     if (_isLikesLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+        ),
       );
     }
     if (_likesError != null) {
@@ -1739,7 +1745,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     if (_isFollowersLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+        ),
       );
     }
     if (_followersError != null) {
@@ -1943,7 +1951,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     if (_isFollowingLoading) {
       return const Padding(
         padding: EdgeInsets.only(top: 12),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFEBB411)),
+        ),
       );
     }
     if (_followingError != null) {
@@ -2328,7 +2338,10 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               const SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFEBB411),
+                ),
               ),
               const SizedBox(height: 10),
               Text(
