@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:readmore/readmore.dart';
 import 'package:rwa_app/screens/profile/new_profile.dart';
 import 'package:rwa_app/widgets/html_preview.dart';
@@ -894,7 +895,9 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                               ),
                                               const Spacer(),
                                               Text(
-                                                timeAgo(thread['createdAt']),
+                                                _timestampLabelNoTZ(
+                                                  thread['createdAt'],
+                                                ),
                                                 style: GoogleFonts.inter(
                                                   fontWeight: FontWeight.w400,
                                                   fontSize: 11,
@@ -951,6 +954,38 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
       return '${difference.inMinutes}m ago';
     } else {
       return 'Just now';
+    }
+  }
+
+  String _absoluteLocalNoTZ(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final date = DateFormat('MMM d, yyyy').format(dt); // e.g., Sep 5, 2025
+      final time = DateFormat('h:mm a').format(dt); // e.g., 12:08 PM
+      return '$date • $time';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _timestampLabelNoTZ(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    // reuse your existing timeAgo(String) in this file
+    final ago = timeAgo(iso);
+
+    // your timeAgo returns a date (dd/mm/yyyy) for >8 days → just show absolute
+    final looksLikeDate =
+        ago.contains('/') || ago.contains(',') || ago.contains('20');
+
+    if (looksLikeDate) return _absoluteLocalNoTZ(iso);
+
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final tm = DateFormat('h:mm a').format(dt);
+      return '$ago • $tm'; // e.g., "2h ago • 3:14 PM"
+    } catch (_) {
+      return _absoluteLocalNoTZ(iso);
     }
   }
 }
