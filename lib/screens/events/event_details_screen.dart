@@ -60,7 +60,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         } else if (now.isAfter(end)) {
           status = 'Ended';
         } else {
-          status = 'Ongoing'; // ✅ match cards
+          status = 'Ongoing';
         }
       }
 
@@ -89,34 +89,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  Color _statusColor(String s) {
+  // ===== Status badge style (same as card tag) =====
+  Color _statusFillColor(String s) {
     switch (s.toLowerCase()) {
       case 'ongoing':
         return const Color(0xFF27AE60); // green
       case 'upcoming':
         return const Color(0xFFEBB411); // yellow
       case 'ended':
-        return Colors.red; // 🔴 red for ended
+        return Colors.red; // red
       default:
         return Colors.grey;
     }
   }
 
-  Widget _statusChip(String status) {
-    final c = _statusColor(status);
+  Widget _statusTag(String status) {
+    final c = _statusFillColor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c),
+        color: c,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         status.isEmpty ? '—' : status,
         style: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: c,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
         ),
       ),
     );
@@ -163,7 +163,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
 
     Uri? uri = Uri.tryParse(raw);
-    // If scheme missing, assume https
     if (uri == null || uri.scheme.isEmpty) {
       uri = Uri.tryParse('https://$raw');
     }
@@ -231,9 +230,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               spacing: 6,
                               runSpacing: 4,
                               children: [
-                                _statusChip(
-                                  (event!['status'] ?? '').toString(),
-                                ),
+                                // ✅ same style badge as card
+                                _statusTag((event!['status'] ?? '').toString()),
                                 if (event!['eventType'] != null &&
                                     (event!['eventType']).toString().isNotEmpty)
                                   _typePill(
@@ -349,8 +347,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       )
                     else if ((event!['eventLink'] ?? '').toString().isNotEmpty)
                       ElevatedButton.icon(
-                        onPressed:
-                            _openRegistration, // uses fallback to eventLink
+                        onPressed: _openRegistration, // fallback to eventLink
                         icon: const Icon(
                           Icons.open_in_new,
                           color: Colors.white,
