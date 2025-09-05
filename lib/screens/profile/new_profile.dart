@@ -32,7 +32,7 @@ class NewProfileScreen extends StatefulWidget {
 class _NewProfileScreenState extends State<NewProfileScreen> {
   String _selectedTab = "Threads";
 
-  // ====== LOGGED-IN (from SharedPreferences) ======
+  // ====== LOGGED-IN (from SharedPreferences for initial paint only) ======
   String? _userName; // me
   String? _userId; // me
   String? _profileImageUrl; // me
@@ -183,11 +183,143 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     super.dispose();
   }
 
+  // Bust image cache by appending a changing query param
+  int _profileBust = 0;
+  void _bumpBust() {
+    setState(() => _profileBust = DateTime.now().millisecondsSinceEpoch);
+  }
+
+  String _bustUrl(String url) {
+    if (url.isEmpty) return url;
+    final sep = url.contains('?') ? '&' : '?';
+    return '$url${sep}v=$_profileBust';
+  }
+
+  Future<void> _fetchUserDetailUnified(
+    String userId, {
+    required bool isSelf,
+  }) async {
+    if (!isSelf) {
+      setState(() {
+        _isViewedLoading = true;
+        _viewedError = null;
+      });
+    }
+
+    try {
+      final uri = Uri.parse(
+        "https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId",
+      );
+      final res = await http.get(uri, headers: await _authHeaders());
+      if (res.statusCode != 200) {
+        throw Exception("HTTP ${res.statusCode}: ${res.body}");
+      }
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data["status"] != true ||
+          data["userDetail"] == null ||
+          data["stat"] == null) {
+        throw Exception("Invalid payload");
+      }
+
+      final detail = Map<String, dynamic>.from(data["userDetail"]);
+      final stat = Map<String, dynamic>.from(data["stat"]);
+
+      final linksDyn = (detail["link"] as List?) ?? [];
+      final parsedLinks =
+          linksDyn
+              .map<Map<String, String>>(
+                (e) => {
+                  "platform": (e["platform"] ?? "").toString(),
+                  "url": (e["url"] ?? "").toString(),
+                },
+              )
+              .where((m) => m["platform"]!.isNotEmpty && m["url"]!.isNotEmpty)
+              .toList();
+
+      if (isSelf) {
+        // Update "self" fields so bio/image/banner no longer rely on prefs
+        setState(() {
+          _userName =
+              (detail["userName"] ?? _userName ?? "John Doe").toString();
+          _profileImageUrl = (detail["profileImg"] ?? "").toString();
+          _bannerImageUrl = (detail["bannerImg"] ?? "").toString();
+          _description = (detail["description"] ?? "").toString();
+          _createdAt = (detail["createdAt"] ?? "").toString();
+          _tier = (stat["tieredProgression"] ?? _tier ?? "New User").toString();
+
+          _totalFollower = (stat["totalFollower"] ?? 0) as int;
+          _totalFollowing = (stat["totalFollowing"] ?? 0) as int;
+          _totalCommentGiven = (stat["totalCommentGiven"] ?? 0) as int;
+          _totalCommentReceived = (stat["totalCommentReceived"] ?? 0) as int;
+          _totalLikeReceived = (stat["totalLikeReceived"] ?? 0) as int;
+          _totalThreadPosted = (stat["totalThreadPosted"] ?? 0) as int;
+          _totalViewReceived = (stat["totalViewReceived"] ?? 0) as int;
+
+          _myLinks = parsedLinks;
+        });
+      } else {
+        // Update "viewed" fields
+        setState(() {
+          _vpName = (detail["userName"] ?? "").toString();
+          _vpProfileImg = (detail["profileImg"] ?? "").toString();
+          _vpBannerImg = (detail["bannerImg"] ?? "").toString();
+          _vpDescription = (detail["description"] ?? "").toString();
+          _vpCreatedAt = (detail["createdAt"] ?? "").toString();
+          _vpTier = (stat["tieredProgression"] ?? "").toString();
+          _vpLinks = parsedLinks;
+
+          _vpFollower = (stat["totalFollower"] ?? 0) as int;
+          _vpFollowing = (stat["totalFollowing"] ?? 0) as int;
+          _vpCommentGiven = (stat["totalCommentGiven"] ?? 0) as int;
+          _vpCommentReceived = (stat["totalCommentReceived"] ?? 0) as int;
+          _vpLikeReceived = (stat["totalLikeReceived"] ?? 0) as int;
+          _vpThreadPosted = (stat["totalThreadPosted"] ?? 0) as int;
+          _vpViewReceived = (stat["totalViewReceived"] ?? 0) as int;
+        });
+      }
+
+      // Force images to re-download after web edits
+      _bumpBust();
+    } catch (e) {
+      if (isSelf) {
+        // show nothing; self still has local fallback
+        debugPrint("❌ _fetchUserDetailUnified(self) error: $e");
+      } else {
+        setState(() => _viewedError = "Failed to load profile");
+      }
+    } finally {
+      if (!isSelf && mounted) setState(() => _isViewedLoading = false);
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    final targetUserId =
+        (widget.viewedUserId?.isNotEmpty ?? false)
+            ? widget.viewedUserId!
+            : (_userId ?? "");
+    final isSelf = !_isMe ? false : true;
+
+    await _fetchUserDetailUnified(targetUserId, isSelf: isSelf);
+
+    await Future.wait([
+      _fetchUserForums(targetUserId, page: 1, size: 20),
+      _fetchUserLikedForums(targetUserId, page: 1, size: 20),
+      _fetchUserComments(
+        targetUserId,
+        forumId: widget.filterForumIdForComments,
+      ),
+      _fetchFollowers(targetUserId, page: 1, size: 20),
+      _fetchFollowings(targetUserId, page: 1, size: 20),
+      if (!_isMe) _fetchViewedUserBadges(targetUserId),
+    ]);
+  }
+
   Future<void> _loadFromPrefs() async {
     debugPrint('🔎 viewedUserId → ${widget.viewedUserId}');
     final prefs = await SharedPreferences.getInstance();
 
-    // Logged-in values
+    // Logged-in values (used for an immediate paint; will be replaced by API)
     final loadedUserId = prefs.getString('userId');
     final loadedName = prefs.getString('name');
     final loadedProfileImg = prefs.getString('profileImage');
@@ -232,31 +364,19 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             ? widget.viewedUserId!
             : (_userId ?? "");
 
-    // For viewed profiles, pull full detail + badges
-    final futures = <Future>[];
-    if (!_isMe && (widget.viewedUserId ?? "").isNotEmpty) {
-      futures.add(_fetchViewedUserDetail(widget.viewedUserId!));
-      futures.add(_fetchViewedUserBadges(widget.viewedUserId!));
-    }
-
-    // ⬇️ NEW: also fetch *my* links so social icons show on my own profile
-    if (_isMe && (_userId ?? "").isNotEmpty) {
-      futures.add(_fetchMyLinksAndTier(_userId!));
-    }
-
-    // Always fetch created + liked forums + comments for the target user
-    futures.add(_fetchUserForums(targetUserId, page: 1, size: 20));
-    futures.add(_fetchUserLikedForums(targetUserId, page: 1, size: 20));
-    futures.add(
+    // Always fetch fresh details + all sections
+    final futures = <Future>[
+      _fetchUserDetailUnified(targetUserId, isSelf: _isMe),
+      _fetchUserForums(targetUserId, page: 1, size: 20),
+      _fetchUserLikedForums(targetUserId, page: 1, size: 20),
       _fetchUserComments(
         targetUserId,
         forumId: widget.filterForumIdForComments,
       ),
-    );
-
-    // Also fetch followers/followings (eager)
-    futures.add(_fetchFollowers(targetUserId, page: 1, size: 20));
-    futures.add(_fetchFollowings(targetUserId, page: 1, size: 20));
+      _fetchFollowers(targetUserId, page: 1, size: 20),
+      _fetchFollowings(targetUserId, page: 1, size: 20),
+      if (!_isMe) _fetchViewedUserBadges(targetUserId),
+    ];
 
     await Future.wait(futures);
 
@@ -285,111 +405,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
       "Content-Type": "application/json",
       if (jwt != null && jwt.isNotEmpty) "Authorization": "Bearer $jwt",
     };
-  }
-
-  // -------- Fetch full detail for viewed user ----------
-  Future<void> _fetchViewedUserDetail(String userId) async {
-    setState(() {
-      _isViewedLoading = true;
-      _viewedError = null;
-      _vpLinks = [];
-    });
-
-    try {
-      final uri = Uri.parse(
-        "https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId",
-      );
-
-      final res = await http.get(uri, headers: await _authHeaders());
-
-      if (res.statusCode != 200) {
-        throw Exception("HTTP ${res.statusCode}: ${res.body}");
-      }
-
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (data["status"] != true ||
-          data["userDetail"] == null ||
-          data["stat"] == null) {
-        throw Exception("Invalid payload");
-      }
-
-      final detail = (data["userDetail"] as Map<String, dynamic>);
-      final stat = (data["stat"] as Map<String, dynamic>);
-
-      // detail
-      _vpName = (detail["userName"] ?? "").toString();
-      _vpProfileImg = (detail["profileImg"] ?? "").toString();
-      _vpBannerImg = (detail["bannerImg"] ?? "").toString();
-      _vpDescription = (detail["description"] ?? "").toString();
-      _vpCreatedAt = (detail["createdAt"] ?? "").toString();
-
-      final linksDyn = (detail["link"] as List?) ?? [];
-      _vpLinks =
-          linksDyn
-              .map<Map<String, String>>(
-                (e) => {
-                  "platform": (e["platform"] ?? "").toString(),
-                  "url": (e["url"] ?? "").toString(),
-                },
-              )
-              .where((m) => m["platform"]!.isNotEmpty && m["url"]!.isNotEmpty)
-              .toList();
-
-      // stat
-      _vpFollower = (stat["totalFollower"] ?? 0) as int;
-      _vpFollowing = (stat["totalFollowing"] ?? 0) as int;
-      _vpCommentGiven = (stat["totalCommentGiven"] ?? 0) as int;
-      _vpCommentReceived = (stat["totalCommentReceived"] ?? 0) as int;
-      _vpLikeReceived = (stat["totalLikeReceived"] ?? 0) as int;
-      _vpThreadPosted = (stat["totalThreadPosted"] ?? 0) as int;
-      _vpViewReceived = (stat["totalViewReceived"] ?? 0) as int;
-      _vpTier = (stat["tieredProgression"] ?? "").toString();
-    } catch (e) {
-      _viewedError = "Failed to load profile";
-      debugPrint("❌ Viewed profile error: $e");
-    } finally {
-      if (mounted) setState(() => _isViewedLoading = false);
-    }
-  }
-
-  // ⬇️ NEW: fetch *my* links & tier (so my own profile shows social icons)
-  Future<void> _fetchMyLinksAndTier(String userId) async {
-    try {
-      final uri = Uri.parse(
-        "https://rwa-f1623a22e3ed.herokuapp.com/api/users/detail/$userId",
-      );
-      final res = await http.get(uri, headers: await _authHeaders());
-      if (res.statusCode != 200) throw Exception("HTTP ${res.statusCode}");
-
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (data["status"] != true || data["userDetail"] == null) {
-        throw Exception("Invalid payload");
-      }
-
-      final detail = (data["userDetail"] as Map<String, dynamic>);
-      final linksDyn = (detail["link"] as List?) ?? [];
-      final myLinks =
-          linksDyn
-              .map<Map<String, String>>(
-                (e) => {
-                  "platform": (e["platform"] ?? "").toString(),
-                  "url": (e["url"] ?? "").toString(),
-                },
-              )
-              .where((m) => m["platform"]!.isNotEmpty && m["url"]!.isNotEmpty)
-              .toList();
-
-      // optional tier override from stat if present
-      final stat = (data["stat"] as Map<String, dynamic>?);
-      final myTier = stat?["tieredProgression"]?.toString();
-
-      setState(() {
-        _myLinks = myLinks;
-        if ((myTier ?? "").isNotEmpty) _tier = myTier;
-      });
-    } catch (e) {
-      debugPrint("❌ fetchMyLinksAndTier error: $e");
-    }
   }
 
   // -------- Fetch badges for viewed user ----------
@@ -774,8 +789,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     // Email
     final initialEmail =
         _isMe
-            ? (prefs.getString('email') ?? '') // you keep email in prefs
-            : ''; // viewing others: leave disabled/blank if you don't expose their email
+            ? (prefs.getString('email') ?? '') // email kept in prefs
+            : ''; // viewing others: leave disabled/blank
 
     // Images
     final initialProfileImg =
@@ -787,11 +802,15 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
             ? (_bannerImageUrl ?? prefs.getString('bannerImage') ?? '')
             : (_vpBannerImg ?? '');
 
-    // LINKS — THIS WAS THE MISSING PIECE
+    // LINKS
     final List<Map<String, String>> initialLinks =
+        _isMe ? (_myLinks) : (_vpLinks);
+
+    // NEW: Bio/Description
+    final initialBio =
         _isMe
-            ? (_myLinks) // from _fetchMyLinksAndTier
-            : (_vpLinks); // from _fetchViewedUserDetail
+            ? (_description ?? prefs.getString('description') ?? '')
+            : (_vpDescription ?? '');
 
     final result = await Navigator.push(
       context,
@@ -802,13 +821,15 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               initialEmail: initialEmail,
               initialProfileImgUrl: initialProfileImg,
               initialBannerImgUrl: initialBannerImg,
-              initialLinks: initialLinks, // ✅ pass real links, not []
+              initialLinks: initialLinks,
+              initialBio: initialBio, // ✅ NEW: pass bio to editor
             ),
       ),
     );
 
     if (result == true) {
-      await _loadFromPrefs();
+      // Pull fresh data after edits
+      await _refreshProfile();
       setState(() {});
     }
   }
@@ -976,6 +997,11 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, size: 20, color: theme.iconTheme.color),
+            onPressed: _refreshProfile,
+            tooltip: 'Refresh',
+          ),
           if (_isMe)
             IconButton(
               icon: Icon(Icons.edit, size: 22, color: theme.iconTheme.color),
@@ -1033,165 +1059,172 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                   child: CircularProgressIndicator(color: Color(0xFFEBB411)),
                 ),
               )
-              : SingleChildScrollView(
-                child: Column(
-                  children: [
-                    // Banner & Avatar
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 40),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        clipBehavior: Clip.none,
-                        children: [
-                          SizedBox(
-                            height: 130,
-                            width: double.infinity,
-                            child:
-                                (displayBannerImg.isNotEmpty)
-                                    ? Image.network(
-                                      displayBannerImg,
-                                      fit: BoxFit.cover,
-                                    )
-                                    : Image.asset(
-                                      'assets/airdrop.png',
-                                      fit: BoxFit.cover,
+              : RefreshIndicator(
+                color: const Color(0xFFEBB411),
+                onRefresh: _refreshProfile,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
+                      // Banner & Avatar
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 40),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            SizedBox(
+                              height: 130,
+                              width: double.infinity,
+                              child:
+                                  (displayBannerImg.isNotEmpty)
+                                      ? Image.network(
+                                        _bustUrl(displayBannerImg),
+                                        fit: BoxFit.cover,
+                                      )
+                                      : Image.asset(
+                                        'assets/airdrop.png',
+                                        fit: BoxFit.cover,
+                                      ),
+                            ),
+                            Positioned(
+                              bottom: -40,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDark ? Colors.black : Colors.white,
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 6,
+                                      offset: Offset(0, 2),
                                     ),
-                          ),
-                          Positioned(
-                            bottom: -40,
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isDark ? Colors.black : Colors.white,
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black12,
-                                    blurRadius: 6,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: CircleAvatar(
-                                radius: 45,
-                                backgroundColor: Colors.grey.shade300,
-                                backgroundImage:
-                                    (displayProfileImg.isNotEmpty)
-                                        ? NetworkImage(displayProfileImg)
-                                        : null,
-                                child:
-                                    (displayProfileImg.isEmpty)
-                                        ? Text(
-                                          _getInitials(displayName),
-                                          style: GoogleFonts.inter(
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black,
-                                          ),
-                                        )
-                                        : null,
+                                  ],
+                                ),
+                                child: CircleAvatar(
+                                  radius: 45,
+                                  backgroundColor: Colors.grey.shade300,
+                                  backgroundImage:
+                                      (displayProfileImg.isNotEmpty)
+                                          ? NetworkImage(
+                                            _bustUrl(displayProfileImg),
+                                          )
+                                          : null,
+                                  child:
+                                      (displayProfileImg.isEmpty)
+                                          ? Text(
+                                            _getInitials(displayName),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black,
+                                            ),
+                                          )
+                                          : null,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
+                      const SizedBox(height: 10),
 
-                    // Name
-                    Text(
-                      displayName,
-                      style: GoogleFonts.inter(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Tier
-                    if ((displayTier).isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: _buildTierChip(displayTier, isDark),
-                      ),
-
-                    const SizedBox(height: 10),
-
-                    // Joined date
-                    Text(
-                      _formatJoinedDate(displayCreatedAt),
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: _muted(theme),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Description
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        displayDesc.isEmpty ? "No bio yet" : displayDesc,
+                      // Name
+                      Text(
+                        displayName,
                         style: GoogleFonts.inter(
-                          fontSize: 12,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
                           color: Theme.of(context).colorScheme.onSurface,
                         ),
-                        textAlign: TextAlign.center,
                       ),
-                    ),
+                      const SizedBox(height: 6),
 
-                    // ⬇️ Social Links
-                    if (linksToShow.isNotEmpty) ...[
+                      // Tier
+                      if ((displayTier).isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: _buildTierChip(displayTier, isDark),
+                        ),
+
+                      const SizedBox(height: 10),
+
+                      // Joined date
+                      Text(
+                        _formatJoinedDate(displayCreatedAt),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: _muted(theme),
+                        ),
+                      ),
+
                       const SizedBox(height: 12),
-                      _buildLinksRow(linksToShow, Theme.of(context)),
+
+                      // Description
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          displayDesc.isEmpty ? "No bio yet" : displayDesc,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                      // ⬇️ Social Links
+                      if (linksToShow.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _buildLinksRow(linksToShow, Theme.of(context)),
+                      ],
+
+                      const SizedBox(height: 16),
+                      _buildTabs(Theme.of(context), tabs),
+                      const SizedBox(height: 8),
+
+                      // ----------------- Tab content -----------------
+                      if (_selectedTab == "Threads")
+                        _buildThreadsSection()
+                      else if (_selectedTab == "Comments")
+                        _buildCommentsSection()
+                      else if (_selectedTab == "Likes")
+                        _buildLikesSection()
+                      else if (_selectedTab == "Followers")
+                        _buildFollowersSection()
+                      else if (_selectedTab == "Following")
+                        _buildFollowingsSection(),
+
+                      const SizedBox(height: 8),
+                      if (_followError != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            _followError!,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.redAccent,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+
+                      if (useViewed && _viewedError != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            _viewedError!,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.redAccent,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                     ],
-
-                    const SizedBox(height: 16),
-                    _buildTabs(Theme.of(context), tabs),
-                    const SizedBox(height: 8),
-
-                    // ----------------- Tab content -----------------
-                    if (_selectedTab == "Threads")
-                      _buildThreadsSection()
-                    else if (_selectedTab == "Comments")
-                      _buildCommentsSection()
-                    else if (_selectedTab == "Likes")
-                      _buildLikesSection()
-                    else if (_selectedTab == "Followers")
-                      _buildFollowersSection()
-                    else if (_selectedTab == "Following")
-                      _buildFollowingsSection(),
-
-                    const SizedBox(height: 8),
-                    if (_followError != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          _followError!,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-
-                    if (useViewed && _viewedError != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          _viewedError!,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
     );
@@ -1267,7 +1300,6 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Card(
                 elevation: 0,
-
                 color: _cardBg(theme),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -1381,53 +1413,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ),
                         ],
 
-                        // // Footer stats
+                        // Footer stats (commented out in your original)
                         // const SizedBox(height: 10),
-                        // Row(
-                        //   children: [
-                        //     Icon(
-                        //       Icons.thumb_up_alt_outlined,
-                        //       size: 16,
-                        //       color: _muted(theme),
-                        //     ),
-                        //     const SizedBox(width: 4),
-                        //     Text(
-                        //       "$upvotes",
-                        //       style: GoogleFonts.inter(
-                        //         fontSize: 12,
-                        //         color: _muted(theme),
-                        //       ),
-                        //     ),
-                        //     const SizedBox(width: 14),
-                        //     Icon(
-                        //       Icons.emoji_emotions_outlined,
-                        //       size: 16,
-                        //       color: _muted(theme),
-                        //     ),
-                        //     const SizedBox(width: 4),
-                        //     Text(
-                        //       "$reactionsCount",
-                        //       style: GoogleFonts.inter(
-                        //         fontSize: 12,
-                        //         color: _muted(theme),
-                        //       ),
-                        //     ),
-                        //     const SizedBox(width: 14),
-                        //     Icon(
-                        //       Icons.mode_comment_outlined,
-                        //       size: 16,
-                        //       color: _muted(theme),
-                        //     ),
-                        //     const SizedBox(width: 4),
-                        //     Text(
-                        //       "$commentsCount",
-                        //       style: GoogleFonts.inter(
-                        //         fontSize: 12,
-                        //         color: _muted(theme),
-                        //       ),
-                        //     ),
-                        //   ],
-                        // ),
+                        // Row( ... ),
                       ],
                     ),
                   ),
@@ -2223,7 +2211,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
     return CircleAvatar(
       radius: radius,
       backgroundColor: bg,
-      backgroundImage: img.isNotEmpty ? NetworkImage(img) : null,
+      backgroundImage: img.isNotEmpty ? NetworkImage(_bustUrl(img)) : null,
       child:
           img.isEmpty
               ? Text(

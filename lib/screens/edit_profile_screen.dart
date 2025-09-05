@@ -16,6 +16,7 @@ class EditProfileScreen extends StatefulWidget {
     this.initialProfileImgUrl,
     this.initialBannerImgUrl,
     this.initialLinks = const [],
+    this.initialBio, // ✅ NEW
   });
 
   final String? initialName;
@@ -23,6 +24,7 @@ class EditProfileScreen extends StatefulWidget {
   final String? initialProfileImgUrl;
   final String? initialBannerImgUrl;
   final List<Map<String, String>> initialLinks; // [{platform,url}]
+  final String? initialBio; // ✅ NEW
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -32,6 +34,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController(); // ✅ NEW
 
   final List<_LinkRow> _links = [];
 
@@ -85,6 +88,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _hydrateInitials() {
     _nameCtrl.text = widget.initialName ?? '';
     _emailCtrl.text = widget.initialEmail ?? '';
+    _bioCtrl.text = widget.initialBio ?? ''; // ✅ NEW
     _existingProfileUrl = widget.initialProfileImgUrl ?? '';
     _existingBannerUrl = widget.initialBannerImgUrl ?? '';
 
@@ -106,6 +110,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if ((_emailCtrl.text).trim().isEmpty) {
       final savedEmail = prefs.getString('email') ?? '';
       if (savedEmail.isNotEmpty) _emailCtrl.text = savedEmail;
+    }
+    if ((_bioCtrl.text).trim().isEmpty) {
+      final savedBio = prefs.getString('description') ?? '';
+      if (savedBio.isNotEmpty) _bioCtrl.text = savedBio;
     }
 
     final savedLinksJson = prefs.getString('links');
@@ -178,6 +186,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _bioCtrl.dispose();
     super.dispose();
   }
 
@@ -263,10 +272,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (body is Map && body['status'] == true) {
           final detail = body['userDetail'];
           if (detail is Map) {
-            // normalize keys for the rest of the code
             final bannerFromServer =
-                detail['bannerImg'] ??
-                detail['emabannerImg']; // ← typo tolerant
+                detail['bannerImg'] ?? detail['emabannerImg']; // typo tolerant
             return {
               'userName': detail['userName'],
               'name': detail['userName'],
@@ -277,6 +284,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               'bannerImage': bannerFromServer,
               'link': detail['link'],
               'links': detail['link'],
+              'description': detail['description'], // ✅ NEW
               '_raw': detail,
               '_stat': body['stat'],
             };
@@ -322,12 +330,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       debugPrint("Headers: ${req.headers}");
       debugPrint("UserName: ${_nameCtrl.text.trim()}");
       debugPrint("Email: ${_emailCtrl.text.trim()}");
+      debugPrint("Bio: ${_bioCtrl.text.trim()}"); // ✅
       debugPrint("Remove Banner: $_removeBanner");
       debugPrint("Remove Profile: $_removeProfile");
       debugPrint("Links: $links");
 
       req.fields['userName'] = _nameCtrl.text.trim();
       req.fields['email'] = _emailCtrl.text.trim();
+      req.fields['description'] = _bioCtrl.text.trim(); // ✅ include bio
       req.fields['removeBannerImg'] = _removeBanner ? "true" : "false";
       req.fields['removeProfileImg'] = _removeProfile ? "true" : "false";
       req.fields['link'] = jsonEncode(links);
@@ -380,6 +390,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             (fresh['bannerImg'] ?? fresh['bannerImage'] ?? '')?.toString() ??
             '';
         final serverLinks = (fresh['link'] ?? fresh['links']);
+        final descriptionServer =
+            (fresh['description'] ?? _bioCtrl.text).toString(); // ✅
 
         // Decide final URLs using "touch guards"
         String finalProfileUrl;
@@ -388,26 +400,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (_removeProfile) {
           finalProfileUrl = '';
         } else if (_profileTouched) {
-          // user changed/selected profile → accept server profile
           finalProfileUrl = profileUrlServer;
         } else {
-          // user did NOT touch profile → keep what we had
           finalProfileUrl = _existingProfileUrl ?? profileUrlServer;
         }
 
         if (_removeBanner) {
           finalBannerUrl = '';
         } else if (_bannerTouched) {
-          // user changed/selected banner → accept server banner
           finalBannerUrl = bannerUrlServer;
         } else {
-          // user did NOT touch banner → keep what we had, ignore accidental server change
           finalBannerUrl = _existingBannerUrl ?? bannerUrlServer;
         }
 
         // Persist
         await prefs.setString('name', userName);
         await prefs.setString('email', email);
+        await prefs.setString('description', descriptionServer); // ✅
         await prefs.setString('profileImage', finalProfileUrl);
         await prefs.setString('bannerImage', finalBannerUrl);
 
@@ -437,6 +446,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         // Couldn’t refetch. Still update stable fields locally and bust cache.
         await prefs.setString('name', _nameCtrl.text.trim());
         await prefs.setString('email', _emailCtrl.text.trim());
+        await prefs.setString('description', _bioCtrl.text.trim()); // ✅
         await prefs.setString('links', jsonEncode(links));
 
         if (_removeProfile) await prefs.setString('profileImage', '');
@@ -551,8 +561,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 theme,
                                 _emailCtrl,
                                 "Email is linked to your account",
-                                // keep validator if you want it checked on save; the value still comes from controller
+                                // If field is disabled, don't validate it
                                 validator: (v) {
+                                  // validator won't be used because enabled=false,
+                                  // but keep here as reference if re-enabled later
                                   final s = v?.trim() ?? '';
                                   if (s.isEmpty) return "Email cannot be empty";
                                   final ok = RegExp(
@@ -561,11 +573,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   return ok ? null : "Invalid email";
                                 },
                                 enabled:
-                                    false, // ⬅️ disables edits & grays it out
-                                readOnly:
-                                    true, // ⬅️ belts-and-braces (optional)
-                                showLock:
-                                    true, // ⬅️ cute lock icon on the right
+                                    false, // ⬅️ disables edits & greys it out
+                                readOnly: true, // ⬅️ extra safety
+                                showLock: true, // ⬅️ lock icon
+                              ),
+                              const SizedBox(height: 16),
+
+                              _label("Bio", theme),
+                              const SizedBox(height: 6),
+                              _inputField(
+                                theme,
+                                _bioCtrl,
+                                "Tell people about yourself…",
+                                maxLines: 4,
+                                minLines: 3,
+                                validator: (v) => null, // optional
                               ),
 
                               const SizedBox(height: 16),
@@ -705,13 +727,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     bool showLock = false,
   }) {
     final disabled = !enabled;
+    // If field is disabled, don't validate it at submit
+    String? Function(String?)? effectiveValidator = disabled ? null : validator;
+
     return TextFormField(
       controller: controller,
       minLines: minLines,
       maxLines: maxLines,
-      validator: validator,
-      enabled: enabled, // ⬅️ important
-      readOnly: readOnly, // ⬅️ optional: keep focus but block edits
+      validator: effectiveValidator,
+      enabled: enabled,
+      readOnly: readOnly,
       style: GoogleFonts.inter(
         textStyle: theme.textTheme.bodyMedium?.copyWith(
           color:
@@ -850,7 +875,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Widget _linksBlock(ThemeData theme) {
     final textColor = theme.colorScheme.onSurface;
-    final hintColor = theme.hintColor; // usually grey-ish and theme-aware
+    final hintColor = theme.hintColor;
     final borderColor = theme.dividerColor;
 
     InputDecoration _fieldDec({required String label, String? hint}) {
@@ -1013,7 +1038,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               style: TextStyle(fontSize: 12),
             ),
             style: ButtonStyle(
-              foregroundColor: WidgetStatePropertyAll(
+              // 🔧 FIX: use MaterialStatePropertyAll (not WidgetStatePropertyAll)
+              foregroundColor: MaterialStatePropertyAll(
                 theme.colorScheme.primary,
               ),
             ),
