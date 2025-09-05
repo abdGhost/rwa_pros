@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:rwa_app/models/coin_model.dart' show Coin, CurrenciesResponse;
-import 'package:rwa_app/screens/portfolio_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AddCoinToPortfolioScreen extends StatefulWidget {
@@ -15,9 +14,23 @@ class AddCoinToPortfolioScreen extends StatefulWidget {
 }
 
 class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
+  // ===== Logging =====
+  static const bool kLog = true; // toggle logs here
+  void _log(String tag, Object msg) {
+    if (!kLog) return;
+    debugPrint('[AddCoin][$tag][${DateTime.now().toIso8601String()}] $msg');
+  }
+
+  String _short(Object? s, {int max = 400}) {
+    final str = s?.toString() ?? '';
+    return str.length > max ? '${str.substring(0, max)}…(${str.length})' : str;
+  }
+
+  // ===== State =====
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
   bool _isLoading = true;
+
   bool _isAdding = false;
   String? _addingCoinId;
 
@@ -28,24 +41,36 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
   @override
   void initState() {
     super.initState();
+    _log('initState', 'enter');
     fetchCoins();
   }
 
   Future<void> fetchCoins({int page = 1, int size = 25}) async {
+    final uri = Uri.parse("$_baseUrl/currencies?page=$page&size=$size");
+    _log('fetchCoins', 'GET $uri');
     try {
-      final uri = Uri.parse("$_baseUrl/currencies?page=$page&size=$size");
       final response = await http.get(uri);
+      _log(
+        'fetchCoins',
+        'status=${response.statusCode} body=${_short(response.body)}',
+      );
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         final parsed = CurrenciesResponse.fromJson(json);
+        if (!mounted) return;
         setState(() {
           coins = parsed.currencies;
           _isLoading = false;
         });
+        _log('fetchCoins', 'coins=${coins.length}');
       } else {
-        throw Exception('Failed to load coins: ${response.body}');
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        _log('fetchCoins', 'non-200 -> show list empty');
       }
-    } catch (e) {
+    } catch (e, st) {
+      _log('fetchCoins', 'ERROR: $e\n$st');
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -73,6 +98,11 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
     final others =
         filteredCoins.where((coin) => !recentlyAdded.contains(coin)).toList();
 
+    _log(
+      'build',
+      'isLoading=$_isLoading filtered=${others.length} recently=${recentlyAdded.length}',
+    );
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -85,7 +115,10 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
           children: [
             IconButton(
               icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                _log('nav', 'back pressed -> pop(false)');
+                Navigator.pop(context, false);
+              },
             ),
             Expanded(
               child: Container(
@@ -96,9 +129,10 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                 ),
                 child: TextField(
                   controller: _searchController,
-                  onChanged:
-                      (value) =>
-                          setState(() => _isSearching = value.isNotEmpty),
+                  onChanged: (value) {
+                    setState(() => _isSearching = value.isNotEmpty);
+                    _log('search', 'query="$value" searching=$_isSearching');
+                  },
                   style: GoogleFonts.inter(color: const Color(0xFF16C784)),
                   cursorColor: const Color(0xFFEBB411),
                   decoration: InputDecoration(
@@ -111,6 +145,7 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                               onTap: () {
                                 _searchController.clear();
                                 setState(() => _isSearching = false);
+                                _log('search', 'cleared');
                               },
                               child: const Icon(Icons.close, size: 18),
                             )
@@ -257,6 +292,7 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                   _isAdding = true;
                   _addingCoinId = coin.id;
                 });
+                _log('add', 'tap coin id=${coin.id} symbol=${coin.symbol}');
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -264,19 +300,21 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                       'Adding ${coin.name} to portfolio...',
                       style: GoogleFonts.inter(),
                     ),
-                    duration: const Duration(seconds: 1),
+                    duration: const Duration(milliseconds: 800),
                   ),
                 );
 
                 try {
                   final prefs = await SharedPreferences.getInstance();
                   final token = prefs.getString('token') ?? '';
+                  _log('add', 'token.isEmpty=${token.isEmpty}');
 
                   if (token.isEmpty) {
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Authentication token missing.',
+                          'Please login first.',
                           style: GoogleFonts.inter(),
                         ),
                       ),
@@ -284,47 +322,63 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                     return;
                   }
 
+                  final uri = Uri.parse(
+                    'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/mobile/add/portfolio/${coin.id}',
+                  );
+                  _log('add', 'GET $uri');
                   final response = await http.get(
-                    Uri.parse(
-                      'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/mobile/add/portfolio/${coin.id}',
-                    ),
+                    uri,
                     headers: {'Authorization': 'Bearer $token'},
                   );
+                  _log(
+                    'add',
+                    'status=${response.statusCode} body=${_short(response.body)}',
+                  );
 
-                  final data = jsonDecode(response.body);
-                  // if (response.statusCode == 200 && data['status'] == 200) {
-                  //   ScaffoldMessenger.of(context).showSnackBar(
-                  //     SnackBar(
-                  //       content: Text(
-                  //         '${data['message']}',
-                  //         style: GoogleFonts.inter(),
-                  //       ),
-                  //     ),
-                  //   );
-                  //   Navigator.pop(context, true);
-                  // }
-                  if (response.statusCode == 200 && data['status'] == 200) {
+                  dynamic data;
+                  try {
+                    data = jsonDecode(response.body);
+                  } catch (e) {
+                    _log('add', 'jsonDecode error: $e');
+                  }
+
+                  final status = data is Map ? data['status'] : null;
+                  final ok =
+                      response.statusCode == 200 &&
+                      ((status is int && status == 200) ||
+                          (status is bool && status == true) ||
+                          (data is Map &&
+                              (data['success'] == true || data['ok'] == true)));
+
+                  _log('add', 'parsed status=$status -> ok=$ok');
+
+                  if (!mounted) return;
+
+                  if (ok) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          '${data['message']}',
+                          '${data['message'] ?? 'Added to portfolio'}',
                           style: GoogleFonts.inter(),
                         ),
                       ),
                     );
-                    Navigator.pop(context, true);
+                    _log('nav', 'pop(true) to refresh portfolio');
+                    Navigator.pop(context, true); // ✅ only on success
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          '${data['message']}',
+                          '${(data is Map ? data['message'] : null) ?? 'Failed to add coin'}',
                           style: GoogleFonts.inter(),
                         ),
                       ),
                     );
-                    Navigator.pop(context, true);
+                    _log('add', 'stay on screen (failure) so user can retry');
                   }
-                } catch (e) {
+                } catch (e, st) {
+                  _log('add', 'ERROR: $e\n$st');
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -334,10 +388,12 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                     ),
                   );
                 } finally {
+                  if (!mounted) return;
                   setState(() {
                     _isAdding = false;
                     _addingCoinId = null;
                   });
+                  _log('add', 'reset add state');
                 }
               },
       child: Padding(

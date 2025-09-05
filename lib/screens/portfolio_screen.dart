@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -21,6 +22,19 @@ class PortfolioScreen extends StatefulWidget {
 }
 
 class _PortfolioScreenState extends State<PortfolioScreen> {
+  // ===== Logging =====
+  static const bool kLog = true; // toggle logs on/off here
+  void _log(String tag, Object msg) {
+    if (!kLog) return;
+    debugPrint('[Portfolio][$tag][${DateTime.now().toIso8601String()}] $msg');
+  }
+
+  String _short(Object? s, {int max = 400}) {
+    final str = s?.toString() ?? '';
+    return str.length > max ? '${str.substring(0, max)}…(${str.length})' : str;
+  }
+
+  // ===== State =====
   bool _isLoading = true;
   List<dynamic> _coins = [];
   double _totalAmount = 0.0;
@@ -28,25 +42,45 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   double _totalPercentage = 0.0;
   String? _userName;
 
+  // ---- helpers ----
+  double _asDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString().trim()) ?? 0.0;
+  }
+
+  String _asString(dynamic v, {String fallback = ''}) {
+    if (v == null) return fallback;
+    return v.toString();
+  }
+
   @override
   void initState() {
     super.initState();
+    _log('initState', 'enter');
     fetchPortfolio();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    fetchPortfolio();
-  }
+  // ⚠️ removed to avoid racing re-fetches
+  // @override
+  // void didChangeDependencies() {
+  //   super.didChangeDependencies();
+  //   fetchPortfolio();
+  // }
 
   Future<void> fetchPortfolio() async {
+    _log('fetchPortfolio', 'start');
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
       final userName = prefs.getString('name');
+      _log(
+        'fetchPortfolio',
+        'token.isEmpty=${token.isEmpty} userName=$userName',
+      );
 
       if (token.isEmpty) {
+        if (!mounted) return;
         setState(() {
           _coins = [];
           _totalAmount = 0.0;
@@ -55,34 +89,58 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           _userName = userName;
           _isLoading = false;
         });
+        _log('fetchPortfolio', 'no token -> show empty/login state');
         return;
       }
 
+      final uri = Uri.parse(
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/portfolio',
+      );
+      _log('fetchPortfolio', 'GET $uri');
       final response = await http.get(
-        Uri.parse(
-          'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/portfolio',
-        ),
+        uri,
         headers: {'Authorization': 'Bearer $token'},
       );
+      _log('fetchPortfolio', 'status=${response.statusCode}');
+      _log('fetchPortfolio', 'body=${_short(response.body)}');
+
+      final Map<String, dynamic> data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final coinsRaw =
+            data['portfolioToken'] ?? data['portfolioTokens'] ?? [];
+        final List<dynamic> coins = (coinsRaw is List) ? coinsRaw : [];
+        _log('fetchPortfolio', 'coins.length=${coins.length}');
+        _log(
+          'fetchPortfolio',
+          'totals raw: amount=${data['totalAmount']}(${data['totalAmount']?.runtimeType}), return=${data['totalReturn']}(${data['totalReturn']?.runtimeType}), perc=${data['totalPercentage']}(${data['totalPercentage']?.runtimeType})',
+        );
+
+        if (!mounted) return;
         setState(() {
-          _coins = data['portfolioToken'];
-          _totalAmount = (data['totalAmount'] ?? 0).toDouble();
-          _totalReturn = (data['totalReturn'] ?? 0).toDouble();
-          _totalPercentage = (data['totalPercentage'] ?? 0).toDouble();
+          _coins = coins;
+          _totalAmount = _asDouble(data['totalAmount']);
+          _totalReturn = _asDouble(data['totalReturn']);
+          _totalPercentage = _asDouble(data['totalPercentage']);
           _userName = userName;
           _isLoading = false;
         });
+        _log(
+          'fetchPortfolio',
+          'setState done: coins=${_coins.length} amount=$_totalAmount return=$_totalReturn perc=$_totalPercentage',
+        );
       } else {
+        if (!mounted) return;
         setState(() {
           _coins = [];
           _userName = userName;
           _isLoading = false;
         });
+        _log('fetchPortfolio', 'non-200 -> show empty state');
       }
-    } catch (e) {
+    } catch (e, st) {
+      _log('fetchPortfolio', 'ERROR: $e\n$st');
+      if (!mounted) return;
       setState(() {
         _coins = [];
         _userName = null;
@@ -92,29 +150,41 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Future<void> deleteCoinFromPortfolio(String coinId) async {
+    _log('deleteCoin', 'start coinId=$coinId');
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
+      final uri = Uri.parse(
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/remove/portfolio/$coinId',
+      );
+      _log('deleteCoin', 'DELETE $uri');
       final response = await http.delete(
-        Uri.parse(
-          'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/remove/portfolio/$coinId',
-        ),
+        uri,
         headers: {'Authorization': 'Bearer $token'},
+      );
+      _log(
+        'deleteCoin',
+        'status=${response.statusCode} body=${_short(response.body)}',
       );
 
       if (response.statusCode == 200) {
+        if (!mounted) return;
         setState(() {
           _coins.removeWhere((coin) => coin['_id'] == coinId);
         });
+        _log('deleteCoin', 'removed from list, remaining=${_coins.length}');
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete coin.', style: GoogleFonts.inter()),
           ),
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      _log('deleteCoin', 'ERROR: $e\n$st');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error deleting coin: $e', style: GoogleFonts.inter()),
@@ -125,9 +195,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print(_userName);
     final theme = Theme.of(context);
-
+    _log(
+      'build',
+      'isLoading=$_isLoading coins=${_coins.length} userName=$_userName',
+    );
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -165,11 +237,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               width: 30,
               color: theme.iconTheme.color,
             ),
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                ),
+            onPressed: () {
+              _log('nav', 'to ProfileScreen');
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
           ),
           const SizedBox(width: 6),
         ],
@@ -185,16 +259,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFFEBB411),
         shape: const CircleBorder(),
-        // onPressed:
-        //     () => Navigator.push(
-        //       context,
-        //       MaterialPageRoute(builder: (_) => const ChatScreen()),
-        //     ),
-        onPressed:
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ComingSoonScreen()),
-            ),
+        onPressed: () {
+          _log('fab', 'ComingSoon tapped');
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ComingSoonScreen()),
+          );
+        },
         child: SvgPicture.asset(
           'assets/bot_light.svg',
           width: 40,
@@ -206,6 +277,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _buildEmptyState(ThemeData theme) {
+    _log('ui', 'render _buildEmptyState');
     return FutureBuilder<SharedPreferences>(
       future: SharedPreferences.getInstance(),
       builder: (context, snapshot) {
@@ -250,20 +322,29 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (isLoggedIn) {
-                        Navigator.push(
+                        _log(
+                          'nav',
+                          'to AddCoinToPortfolioScreen (empty state button)',
+                        );
+                        await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const AddCoinToPortfolioScreen(),
                           ),
-                        ).then((result) {
-                          if (result == true) {
-                            setState(() => _isLoading = true);
-                            fetchPortfolio();
-                          }
+                        ).then((result) async {
+                          _log(
+                            'nav',
+                            'returned from Add screen, result=$result',
+                          );
+                          if (!mounted) return;
+                          setState(() => _isLoading = true);
+                          await fetchPortfolio();
                         });
                       } else {
+                        _log('nav', 'to OnboardingScreen');
+                        if (!mounted) return;
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(
@@ -298,6 +379,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _buildPortfolioContent(BuildContext context, ThemeData theme) {
+    _log('ui', 'render _buildPortfolioContent coins=${_coins.length}');
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
@@ -319,18 +401,20 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           : Colors.black,
                 ),
               ),
-
               InkWell(
                 onTap: () async {
+                  _log('nav', 'to AddCoinToPortfolioScreen (header +Add Coin)');
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => const AddCoinToPortfolioScreen(),
                     ),
                   );
+                  _log('nav', 'returned from Add screen, result=$result');
                   if (result == true) {
+                    if (!mounted) return;
                     setState(() => _isLoading = true);
-                    fetchPortfolio();
+                    await fetchPortfolio();
                   }
                 },
                 child: Text(
@@ -441,23 +525,29 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     ThemeData theme,
     Map<String, dynamic> coin,
   ) {
-    final double change = (coin['price_change_percentage_24h'] ?? 0).toDouble();
+    final double change = _asDouble(coin['price_change_percentage_24h']);
     final Color changeColor = change >= 0 ? Colors.green : Colors.red;
     final IconData changeIcon =
         change >= 0 ? Icons.arrow_drop_up : Icons.arrow_drop_down;
+
+    final String symbol = _asString(coin['symbol']).toUpperCase();
+    final String name = _asString(coin['name']);
+    final String image = _asString(coin['image']);
+    final double currentPrice = _asDouble(coin['currentPrice']);
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
         GestureDetector(
           onTap: () {
+            _log('nav', 'to ProfilioCoinDetailScreen coin=$symbol');
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder:
                     (_) => ProfilioCoinDetailScreen(
                       coin: coin,
-                      trend: [12.1, 12.3, 12.6, 12.5, 12.8, 13.2, 13.57],
+                      trend: const [12.1, 12.3, 12.6, 12.5, 12.8, 13.2, 13.57],
                     ),
               ),
             );
@@ -473,7 +563,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
             child: Row(
               children: [
                 Image.network(
-                  coin['image'],
+                  image,
                   width: 36,
                   height: 36,
                   errorBuilder: (_, __, ___) => const Icon(Icons.image),
@@ -484,11 +574,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        coin['name'],
+                        name,
                         style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                       ),
                       Text(
-                        "\$${(coin['currentPrice'] ?? 0)}",
+                        "\$${currentPrice.toStringAsFixed(2)}",
                         style: GoogleFonts.inter(
                           color: Colors.grey,
                           fontSize: 12,
@@ -501,7 +591,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      coin['symbol'].toUpperCase(),
+                      symbol,
                       style: GoogleFonts.inter(
                         color: Colors.grey,
                         fontSize: 12,
@@ -532,13 +622,17 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           right: 26,
           child: GestureDetector(
             onTap: () async {
+              _log('nav', 'to AddPortfolioTransactionScreen coin=$symbol');
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddPortfolioTransactionScreen(coin: coin),
                 ),
               );
-              if (result == true) fetchPortfolio();
+              _log('nav', 'returned from AddTransaction, result=$result');
+              if (result == true) {
+                await fetchPortfolio();
+              }
             },
             child: Container(
               width: 28,
