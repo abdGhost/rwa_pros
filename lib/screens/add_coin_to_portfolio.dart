@@ -75,6 +75,113 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
     }
   }
 
+  Future<void> _addCoin(Coin coin) async {
+    if (_isAdding) return;
+    setState(() {
+      _isAdding = true;
+      _addingCoinId = coin.id;
+    });
+    _log('add', 'tap coin id=${coin.id} symbol=${coin.symbol}');
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Adding ${coin.name} to portfolio...',
+          style: GoogleFonts.inter(),
+        ),
+        duration: const Duration(milliseconds: 800),
+      ),
+    );
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      _log('add', 'token.isEmpty=${token.isEmpty}');
+
+      if (token.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please login first.', style: GoogleFonts.inter()),
+          ),
+        );
+        return;
+      }
+
+      final uri = Uri.parse(
+        'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/mobile/add/portfolio/${coin.id}',
+      );
+      _log('add', 'GET $uri');
+      final response = await http.get(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      _log(
+        'add',
+        'status=${response.statusCode} body=${_short(response.body)}',
+      );
+
+      dynamic data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        _log('add', 'jsonDecode error: $e');
+      }
+
+      final status = data is Map ? data['status'] : null;
+      final ok =
+          response.statusCode == 200 &&
+          ((status is int && status == 200) ||
+              (status is bool && status == true) ||
+              (data is Map && (data['success'] == true || data['ok'] == true)));
+
+      _log('add', 'parsed status=$status -> ok=$ok');
+
+      if (!mounted) return;
+
+      if (ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${data['message'] ?? 'Added to portfolio'}',
+              style: GoogleFonts.inter(),
+            ),
+          ),
+        );
+        _log('nav', 'pop(true) to refresh portfolio');
+        Navigator.pop(context, true); // ✅ only on success
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${(data is Map ? data['message'] : null) ?? 'Failed to add coin'}',
+              style: GoogleFonts.inter(),
+            ),
+          ),
+        );
+        _log('add', 'stay on screen (failure) so user can retry');
+      }
+    } catch (e, st) {
+      _log('add', 'ERROR: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error connecting to server.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isAdding = false;
+        _addingCoinId = null;
+      });
+      _log('add', 'reset add state');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -102,6 +209,14 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
       'build',
       'isLoading=$_isLoading filtered=${others.length} recently=${recentlyAdded.length}',
     );
+
+    final noResults =
+        !_isLoading &&
+        _isSearching &&
+        _searchController.text.isNotEmpty &&
+        filteredCoins.isEmpty;
+
+    final noCoinsAtAll = !_isLoading && coins.isEmpty;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -174,6 +289,56 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // No coins at all (API empty)
+                    if (noCoinsAtAll) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                        child: Text(
+                          "No coins available right now.",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // No results for search query
+                    if (noResults) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                "No coins found for “${_searchController.text.trim()}”.",
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _isSearching = false);
+                                _log('search', 'cleared via no-results action');
+                              },
+                              child: Text(
+                                "Clear",
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFFEBB411),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // still show Recently Added chips so user can tap them
+                    ],
+
+                    // Recently Added (clickable chips)
                     if (recentlyAdded.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -194,38 +359,58 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                           separatorBuilder: (_, __) => const SizedBox(width: 8),
                           itemBuilder: (_, i) {
                             final coin = recentlyAdded[i];
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    isDark
-                                        ? Colors.white10
-                                        : const Color(0xFFEEF1F6),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                children: [
-                                  Image.network(
-                                    coin.image,
-                                    width: 24,
-                                    height: 24,
-                                    errorBuilder:
-                                        (_, __, ___) => const Icon(Icons.image),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    coin.symbol.toUpperCase(),
-                                    style: GoogleFonts.inter(fontSize: 12),
-                                  ),
-                                ],
+                            final addingThis =
+                                _isAdding && _addingCoinId == coin.id;
+                            return InkWell(
+                              onTap: () => _addCoin(coin), // ✅ clickable chip
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      isDark
+                                          ? Colors.white10
+                                          : const Color(0xFFEEF1F6),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Image.network(
+                                      coin.image,
+                                      width: 20,
+                                      height: 20,
+                                      errorBuilder:
+                                          (_, __, ___) =>
+                                              const Icon(Icons.image, size: 16),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      coin.symbol.toUpperCase(),
+                                      style: GoogleFonts.inter(fontSize: 12),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    if (addingThis)
+                                      const SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFFEBB411),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             );
                           },
                         ),
                       ),
                     ],
+
+                    // All Coins list
                     if (others.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -271,6 +456,23 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                         ),
                       ),
                     ],
+
+                    // If nothing to show at all (after handling sections)
+                    if (!noResults &&
+                        !noCoinsAtAll &&
+                        others.isEmpty &&
+                        recentlyAdded.isEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                        child: Text(
+                          "Nothing to show right now.",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -282,120 +484,10 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
     final changeColor =
         isUp ? const Color(0xFF16C784) : const Color(0xFFFF3B30);
     final icon = isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down;
+    final addingThis = _isAdding && _addingCoinId == coin.id;
 
     return InkWell(
-      onTap:
-          _isAdding
-              ? null
-              : () async {
-                setState(() {
-                  _isAdding = true;
-                  _addingCoinId = coin.id;
-                });
-                _log('add', 'tap coin id=${coin.id} symbol=${coin.symbol}');
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Adding ${coin.name} to portfolio...',
-                      style: GoogleFonts.inter(),
-                    ),
-                    duration: const Duration(milliseconds: 800),
-                  ),
-                );
-
-                try {
-                  final prefs = await SharedPreferences.getInstance();
-                  final token = prefs.getString('token') ?? '';
-                  _log('add', 'token.isEmpty=${token.isEmpty}');
-
-                  if (token.isEmpty) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Please login first.',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final uri = Uri.parse(
-                    'https://rwa-f1623a22e3ed.herokuapp.com/api/user/token/mobile/add/portfolio/${coin.id}',
-                  );
-                  _log('add', 'GET $uri');
-                  final response = await http.get(
-                    uri,
-                    headers: {'Authorization': 'Bearer $token'},
-                  );
-                  _log(
-                    'add',
-                    'status=${response.statusCode} body=${_short(response.body)}',
-                  );
-
-                  dynamic data;
-                  try {
-                    data = jsonDecode(response.body);
-                  } catch (e) {
-                    _log('add', 'jsonDecode error: $e');
-                  }
-
-                  final status = data is Map ? data['status'] : null;
-                  final ok =
-                      response.statusCode == 200 &&
-                      ((status is int && status == 200) ||
-                          (status is bool && status == true) ||
-                          (data is Map &&
-                              (data['success'] == true || data['ok'] == true)));
-
-                  _log('add', 'parsed status=$status -> ok=$ok');
-
-                  if (!mounted) return;
-
-                  if (ok) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${data['message'] ?? 'Added to portfolio'}',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    );
-                    _log('nav', 'pop(true) to refresh portfolio');
-                    Navigator.pop(context, true); // ✅ only on success
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${(data is Map ? data['message'] : null) ?? 'Failed to add coin'}',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    );
-                    _log('add', 'stay on screen (failure) so user can retry');
-                  }
-                } catch (e, st) {
-                  _log('add', 'ERROR: $e\n$st');
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error connecting to server.',
-                        style: GoogleFonts.inter(),
-                      ),
-                    ),
-                  );
-                } finally {
-                  if (!mounted) return;
-                  setState(() {
-                    _isAdding = false;
-                    _addingCoinId = null;
-                  });
-                  _log('add', 'reset add state');
-                }
-              },
+      onTap: () => _addCoin(coin),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
@@ -425,7 +517,7 @@ class _AddCoinToPortfolioScreenState extends State<AddCoinToPortfolioScreen> {
                 ],
               ),
             ),
-            _isAdding && _addingCoinId == coin.id
+            addingThis
                 ? const SizedBox(
                   width: 16,
                   height: 16,
