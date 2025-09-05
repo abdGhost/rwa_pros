@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:readmore/readmore.dart';
 import 'package:rwa_app/widgets/html_preview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -130,6 +131,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           "quotedCommentedId": quotedParsed,
           "name": comment['username'] ?? 'Unknown',
           "time": timeAgo(comment['createdAt']),
+          "createdAt":
+              comment['createdAt'] ?? DateTime.now().toUtc().toIso8601String(),
           "text": comment['text'] ?? '',
           "isLiked": false,
           "likes": 0,
@@ -323,18 +326,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     loadData();
   }
 
-  // @override
-  // void dispose() {
-  //   socket.off('commentAddToForum');
-  //   socket.off('reactToForum');
-  //   socket.off('reactToForumDislike'); // ✅ Clean up dislike listener
-  //   socket.off('reactToComment');
-
-  //   _replyController.dispose();
-  //   _scrollController.dispose();
-  //   super.dispose();
-  // }
-
   Future<void> loadData() async {
     await Future.wait([fetchThreadData(), fetchComments()]);
     setState(() {
@@ -444,6 +435,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   "quotedCommentedId": quotedParsed,
                   "name": item['username'] ?? 'Unknown',
                   "time": timeAgo(item['createdAt']),
+                  "createdAt": item['createdAt'],
                   "text": item['text'] ?? '',
                   "isLiked": item['isReact'] ?? false,
                   "likes": likes,
@@ -852,7 +844,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
                     // Time
                     Text(
-                      timeAgo(lastUpdated),
+                      _timestampLabelNoTZ(
+                        lastUpdated,
+                      ), // was: timeAgo(lastUpdated)
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.grey[500],
@@ -1045,7 +1039,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     ),
                     const Spacer(),
                     Text(
-                      reply['time'],
+                      _timestampLabelNoTZ(reply['createdAt']),
+
+                      // _timestampLabel(reply['createdAt']), // was: reply['time']
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.grey[500],
@@ -1390,6 +1386,88 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     } finally {
       isMainReactionProcessing = false;
       if (mounted) setState(() {});
+    }
+  }
+
+  String _tzOffsetLabel(Duration off) {
+    final sign = off.isNegative ? '-' : '+';
+    final abs = off.abs();
+    final hh = abs.inHours.toString().padLeft(2, '0');
+    final mm = (abs.inMinutes % 60).toString().padLeft(2, '0');
+    return 'UTC$sign$hh:$mm';
+  }
+
+  /// Absolute local timestamp like: "Sep 5, 2025 • 12:40 PM UTC+05:30"
+  String _absoluteLocal(String? iso) {
+    if (iso == null || iso.isEmpty) return 'Unknown';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final date = DateFormat('MMM d, yyyy').format(dt);
+      final time = DateFormat('h:mm a').format(dt);
+      final tz = _tzOffsetLabel(dt.timeZoneOffset);
+      return '$date • $time $tz';
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
+
+  /// Final label to render under comments:
+  /// - For recent: "12m ago • 12:28 PM"
+  /// - For older:  "Aug 12, 2025 • 4:03 PM UTC+05:30" (timeAgo returns a date, we still add exact clock)
+  String _timestampLabel(String? iso) {
+    if (iso == null || iso.isEmpty) return 'Unknown';
+    final ago = timeAgo(iso); // your existing relative formatter
+    final abs = _absoluteLocal(iso);
+
+    // If "ago" is already a date (for > 8 days in your current logic),
+    // just use the absolute label to avoid repeating date twice.
+    final looksLikeDate =
+        ago.contains('/') || ago.contains(',') || ago.contains('20');
+    if (looksLikeDate) return abs;
+
+    // Otherwise show both relative and exact time (compact).
+    // Example: "2h ago • 3:14 PM"
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final tm = DateFormat('h:mm a').format(dt);
+      return '$ago • $tm';
+    } catch (_) {
+      return abs;
+    }
+  }
+
+  String _absoluteLocalNoTZ(String? iso) {
+    if (iso == null || iso.isEmpty) return 'Unknown';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final date = DateFormat('MMM d, yyyy').format(dt);
+      final time = DateFormat('h:mm a').format(dt);
+      return '$date • $time'; // <- no timezone
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
+
+  String _timestampLabelNoTZ(String? iso) {
+    if (iso == null || iso.isEmpty) return 'Unknown';
+    final ago = timeAgo(iso);
+
+    // In your logic, timeAgo returns a date string (like 5/9/2025) for > 8 days.
+    final looksLikeDate =
+        ago.contains('/') || ago.contains(',') || ago.contains('20');
+
+    if (looksLikeDate) {
+      // Older → absolute date + time (no TZ)
+      return _absoluteLocalNoTZ(iso);
+    }
+
+    // Recent → "2h ago • 3:14 PM" (no TZ)
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final tm = DateFormat('h:mm a').format(dt);
+      return '$ago • $tm';
+    } catch (_) {
+      return _absoluteLocalNoTZ(iso);
     }
   }
 }
