@@ -822,7 +822,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
               initialProfileImgUrl: initialProfileImg,
               initialBannerImgUrl: initialBannerImg,
               initialLinks: initialLinks,
-              initialBio: initialBio, // ✅ NEW: pass bio to editor
+              initialBio:
+                  initialBio, // ✅ pass bio to editor (ensure constructor supports it)
             ),
       ),
     );
@@ -1413,7 +1414,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ),
                         ],
 
-                        // Footer stats (commented out in your original)
+                        // Footer stats (commented out)
                         // const SizedBox(height: 10),
                         // Row( ... ),
                       ],
@@ -1744,6 +1745,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         (widget.viewedUserId?.isNotEmpty ?? false)
             ? widget.viewedUserId!
             : (_userId ?? "");
+
+    // Refresh lists and (when self) the profile counters too
     await Future.wait([
       _fetchFollowers(
         targetUserId,
@@ -1757,6 +1760,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
         size: _followingsSize,
         filter: _followingsFilter,
       ),
+      if (_isMe) _fetchUserDetailUnified(targetUserId, isSelf: true),
     ]);
   }
 
@@ -1824,7 +1828,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                             isFollowingInitial: following,
                           ),
                     ),
-                  );
+                  ).then((_) => _refreshProfile()); // refresh on return
                 },
                 overlayColor: _inkOverlay(theme),
                 child: Padding(
@@ -1882,7 +1886,8 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ],
                         ),
                       ),
-                      if (!_isMe && id != (_userId ?? ""))
+                      // ✅ Show action on *your own* Followers list too
+                      if (id != (_userId ?? ""))
                         TextButton(
                           style: TextButton.styleFrom(
                             backgroundColor:
@@ -1900,7 +1905,11 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ),
                           onPressed: () => _toggleFollowUserInline(id),
                           child: Text(
-                            following ? "Following" : "Follow",
+                            // ✅ Labels: Follow back / Unfollow on your profile,
+                            // otherwise Follow / Following on someone else's.
+                            _isMe
+                                ? (following ? "Unfollow" : "Follow back")
+                                : (following ? "Following" : "Follow"),
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
@@ -2030,7 +2039,7 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                             isFollowingInitial: true, // “Following” tab
                           ),
                     ),
-                  );
+                  ).then((_) => _refreshProfile()); // refresh on return
                 },
                 overlayColor: _inkOverlay(theme),
                 child: Padding(
@@ -2088,7 +2097,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ],
                         ),
                       ),
-                      if (!_isMe && id != (_userId ?? ""))
+                      // ✅ Allow action on your own Following tab (Unfollow), and
+                      // keep action when viewing someone else's profile too.
+                      if (id != (_userId ?? ""))
                         TextButton(
                           style: TextButton.styleFrom(
                             backgroundColor:
@@ -2106,7 +2117,9 @@ class _NewProfileScreenState extends State<NewProfileScreen> {
                           ),
                           onPressed: () => _toggleFollowUserInline(id),
                           child: Text(
-                            following ? "Following" : "Follow",
+                            _isMe
+                                ? (following ? "Unfollow" : "Follow")
+                                : (following ? "Following" : "Follow"),
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
