@@ -23,24 +23,8 @@ class CoinsTable extends StatefulWidget {
 }
 
 class _CoinsTableState extends State<CoinsTable> {
-  late List<Coin> _sortedCoins;
   String _sortBy = 'rank';
   bool _isAscending = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _sortedCoins = List.from(widget.coins);
-  }
-
-  @override
-  void didUpdateWidget(covariant CoinsTable oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.coins != widget.coins) {
-      _sortedCoins = List.from(widget.coins);
-      _sortCoins();
-    }
-  }
 
   void _onSort(String column) {
     setState(() {
@@ -50,30 +34,34 @@ class _CoinsTableState extends State<CoinsTable> {
         _sortBy = column;
         _isAscending = true;
       }
-      _sortCoins();
     });
   }
 
-  void _sortCoins() {
-    _sortedCoins.sort((a, b) {
-      int compare;
+  List<Coin> _sortedView(List<Coin> input) {
+    var list = List<Coin>.from(input);
+
+    int cmp(Coin a, Coin b) {
       switch (_sortBy) {
         case 'price':
-          compare = a.currentPrice.compareTo(b.currentPrice);
-          break;
+          return (a.currentPrice).compareTo(b.currentPrice);
         case 'marketCap':
-          compare = a.marketCap.compareTo(b.marketCap);
-          break;
+          return (a.marketCap ?? 0).compareTo(b.marketCap ?? 0);
         case 'name':
-          compare = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-          break;
+          return (a.name).toLowerCase().compareTo((b.name).toLowerCase());
+        case 'rank':
         default:
-          compare = (a.marketCapRank ?? 999999).compareTo(
-            b.marketCapRank ?? 999999,
-          );
+          final ar = (a.marketCapRank ?? a.rank ?? 999999);
+          final br = (b.marketCapRank ?? b.rank ?? 999999);
+          return ar.compareTo(br);
       }
-      return _isAscending ? compare : -compare;
-    });
+    }
+
+    list.sort(cmp);
+    if (!_isAscending) {
+      // FIX: Dart uses `reversed` getter -> Iterable, convert to List
+      list = list.reversed.toList();
+    }
+    return list;
   }
 
   String formatNumber(num? value) {
@@ -98,6 +86,9 @@ class _CoinsTableState extends State<CoinsTable> {
       fontSize: 12,
       color: theme.textTheme.bodySmall?.color ?? Colors.grey,
     );
+
+    final sortedCoins = _sortedView(widget.coins);
+    final itemCount = sortedCoins.length + (widget.isLoadingMore ? 1 : 0);
 
     return Center(
       child: ConstrainedBox(
@@ -126,9 +117,11 @@ class _CoinsTableState extends State<CoinsTable> {
             Expanded(
               child: ListView.builder(
                 controller: widget.scrollController,
-                itemCount: _sortedCoins.length + (widget.isLoadingMore ? 1 : 0),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: itemCount,
                 itemBuilder: (context, index) {
-                  if (index >= _sortedCoins.length) {
+                  if (index >= sortedCoins.length) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Center(
@@ -140,9 +133,11 @@ class _CoinsTableState extends State<CoinsTable> {
                     );
                   }
 
-                  final coin = _sortedCoins[index];
-                  final isNegative = coin.priceChange24h < 0;
-                  final isPositive = coin.priceChange24h > 0;
+                  final coin = sortedCoins[index];
+                  final pct =
+                      coin.priceChange24h; // % value if that’s your model
+                  final isNegative = (pct ?? 0) < 0;
+                  final isPositive = (pct ?? 0) > 0;
 
                   return InkWell(
                     onTap: () async {
@@ -174,7 +169,7 @@ class _CoinsTableState extends State<CoinsTable> {
                                 child: Center(
                                   child: Text(
                                     _sortBy == 'rank'
-                                        ? '${coin.rank ?? (widget.startRank + index)}'
+                                        ? '${coin.rank ?? coin.marketCapRank ?? (widget.startRank + index)}'
                                         : '${widget.startRank + index}',
                                     style: rowStyle,
                                   ),
@@ -207,11 +202,11 @@ class _CoinsTableState extends State<CoinsTable> {
                                 flex: 2,
                                 child: Center(
                                   child: Text(
-                                    '${isNegative
+                                    '${(isNegative
                                         ? '-'
                                         : isPositive
                                         ? '+'
-                                        : ''}${coin.priceChange24h.abs().toStringAsFixed(2)}%',
+                                        : '')}${(pct ?? 0).abs().toStringAsFixed(2)}%',
                                     style: rowStyle.copyWith(
                                       color:
                                           isNegative

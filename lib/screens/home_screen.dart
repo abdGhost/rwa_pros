@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:rwa_app/api/api_service.dart';
 import 'package:rwa_app/models/category_model.dart';
 import 'package:rwa_app/models/coin_model.dart';
-import 'package:rwa_app/screens/chat_screen.dart';
 import 'package:rwa_app/screens/coin_search_screen.dart';
 import 'package:rwa_app/screens/coins_table_widget.dart';
 import 'package:rwa_app/screens/coming_soon.dart';
@@ -25,15 +24,42 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  // ==== LOGGING ====
+  static const bool kEnableLogs = true;
+  void _log(String msg) {
+    if (!kEnableLogs) return;
+    final ts = DateTime.now().toIso8601String();
+    debugPrint('[HOME $ts] $msg');
+  }
+
+  // Small helpers to print list stats
+  void _logList(String label, List<Coin> list) {
+    if (!kEnableLogs) return;
+    final n = list.length;
+    final first = n > 0 ? list.first.id : '-';
+    final last = n > 0 ? list.last.id : '-';
+    _log('$label -> len=$n | first=$first | last=$last');
+  }
+
+  // ==== STATE ====
   final ApiService _apiService = ApiService();
   final ScrollController _scrollController = ScrollController();
 
   bool _isLoading = false;
+
+  // All Coins (tab 0) paging
   bool _isLoadingMore = false;
   bool _hasMoreData = true;
+  int _currentPage = 1;
+
+  // Top Coins (tab 1) paging
+  bool _topCoinsIsLoadingMore = false;
+  bool _topCoinsHasMore = true;
+  int _topCoinsPage = 1;
+
+  // Categories (tab 5)
   bool _isCategoryLoading = false;
 
-  int _currentPage = 1;
   int _selectedTabIndex = 0;
   final int _itemsPerPage = 25;
 
@@ -58,59 +84,89 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _log('initState()');
     _scrollController.addListener(_scrollListener);
     _tabController = TabController(length: 6, vsync: this);
     _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) _onTabChanged(_tabController.index);
+      if (!_tabController.indexIsChanging) {
+        _log('TabController listener fired: index=${_tabController.index}');
+        _onTabChanged(_tabController.index);
+      }
     });
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => fetchInitialData(_tabController.index),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _log(
+        'addPostFrameCallback: fetchInitialData(index=${_tabController.index})',
+      );
+      fetchInitialData(_tabController.index);
+    });
   }
 
   @override
   void dispose() {
+    _log('dispose()');
+    _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
   void _scrollListener() {
-    final isInfiniteTab = _selectedTabIndex == 0;
-    final canLoadMore =
-        isInfiniteTab &&
-        _scrollController.position.pixels >=
-            _scrollController.position.maxScrollExtent - 100 &&
-        !_isLoadingMore &&
-        !_isLoading &&
-        _hasMoreData;
+    if (!(_selectedTabIndex == 0 || _selectedTabIndex == 1)) return;
+    if (!_scrollController.hasClients) return;
 
-    if (canLoadMore) _loadMoreCoins();
+    final position = _scrollController.position;
+    final atBottom = position.pixels >= (position.maxScrollExtent - 100);
+    final isAnyLoading =
+        _isLoading ||
+        (_selectedTabIndex == 0 ? _isLoadingMore : _topCoinsIsLoadingMore);
+    final hasMore = _selectedTabIndex == 0 ? _hasMoreData : _topCoinsHasMore;
+
+    _log(
+      'scroll: tab=$_selectedTabIndex pixels=${position.pixels.toStringAsFixed(1)} '
+      'max=${position.maxScrollExtent.toStringAsFixed(1)} '
+      'viewport=${position.viewportDimension.toStringAsFixed(1)} '
+      'atBottom=$atBottom isAnyLoading=$isAnyLoading hasMore=$hasMore',
+    );
+
+    if (atBottom && !isAnyLoading && hasMore) {
+      _log('-> TRIGGER loadMore for active tab');
+      _loadMoreCoinsForActiveTab();
+    }
   }
 
   Future<void> fetchTreasuryData() async {
+    _log('fetchTreasuryData() start');
     try {
-      final response = await http.get(
-        Uri.parse(
-          'https://rwa-f1623a22e3ed.herokuapp.com/api/treasuryTokens/get/allTokens',
-        ),
-      );
+      final url =
+          'https://rwa-f1623a22e3ed.herokuapp.com/api/treasuryTokens/get/allTokens';
+      final response = await http.get(Uri.parse(url));
+      _log('fetchTreasuryData() HTTP ${response.statusCode}');
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
+        if (!mounted) return;
         setState(() {
           treasuryValue = (json['totalBalance'] as num?)?.toDouble() ?? 0.0;
         });
+        _log('fetchTreasuryData() success totalBalance=$treasuryValue');
+      } else {
+        _log('fetchTreasuryData() non-200: body=${response.body}');
       }
-    } catch (e) {}
+    } catch (e) {
+      _log('❌ fetchTreasuryData() error: $e');
+    }
   }
 
   Future<void> fetchInitialData(int index) async {
+    _log(
+      'fetchInitialData(index=$index) START '
+      '(page0=$_currentPage hasMore0=$_hasMoreData | page1=$_topCoinsPage hasMore1=$_topCoinsHasMore)',
+    );
     setState(() => _isLoading = true);
 
     try {
+      // Top strip stats
       final highlight = await _apiService.fetchHighlightData();
       final topTrend = await _apiService.fetchTopTrendingCoin();
-
       marketCap = (highlight['market_cap'] as num?)?.toDouble();
       volume24h = (highlight['volume_24h'] as num?)?.toDouble();
       marketCapChange =
@@ -122,42 +178,71 @@ class _HomeScreenState extends State<HomeScreen>
               0.0)
           .toStringAsFixed(2);
       trendingCoinImage = topTrend?['image'];
+      _log(
+        'highlight loaded: marketCap=$marketCap vol24h=$volume24h change=$marketCapChange',
+      );
 
       switch (index) {
         case 0:
+          _currentPage = 1;
+          _hasMoreData = true;
+          _log('Tab0 fetch page=$_currentPage size=$_itemsPerPage');
           allCoinsTab = await _apiService.fetchCoinsPaginated(
             page: _currentPage,
             size: _itemsPerPage,
           );
+          _logList('Tab0 page=$_currentPage result', allCoinsTab);
           break;
+
         case 1:
-          topCoinsTab = await _apiService.fetchCoinsPaginated();
+          _topCoinsPage = 1;
+          _topCoinsHasMore = true;
+          _log('Tab1 fetch page=$_topCoinsPage size=$_itemsPerPage');
+          topCoinsTab = await _apiService.fetchCoinsPaginated(
+            page: _topCoinsPage,
+            size: _itemsPerPage,
+            // sort: 'market_cap_desc',
+          );
+          _logList('Tab1 page=$_topCoinsPage result', topCoinsTab);
           break;
+
         case 2:
           final loggedIn = await isUserLoggedIn();
           _showLoginButton = !loggedIn;
+          _log('Tab2 watchlist: loggedIn=$loggedIn');
           watchlistTab = loggedIn ? await _apiService.fetchWatchlists() : [];
+          _logList('Tab2 watchlist result', watchlistTab);
           break;
+
         case 3:
+          _log('Tab3 trending fetch');
           trendingTab = await _apiService.fetchTrendingCoins();
+          _logList('Tab3 trending result', trendingTab);
           break;
+
         case 4:
+          _log('Tab4 topGainers fetch');
           topGainersTab = await _apiService.fetchTopGainers();
+          _logList('Tab4 topGainers result', topGainersTab);
           break;
+
         case 5:
           _isCategoryLoading = true;
+          _log('Tab5 categories fetch');
           categories = await _apiService.fetchCategories();
           _isCategoryLoading = false;
+          _log('Tab5 categories count=${categories.length}');
           break;
       }
     } catch (e) {
-      print("❌ fetchInitialData Error: $e");
+      _log('❌ fetchInitialData error: $e');
     }
 
-    await fetchTreasuryData(); // Move here so it's shown after loading other data
+    await fetchTreasuryData();
 
     if (!mounted) return;
     setState(() => _isLoading = false);
+    _log('fetchInitialData(index=$index) DONE');
   }
 
   List<Coin> get currentTabCoins {
@@ -177,38 +262,107 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _loadMoreCoins() async {
-    setState(() => _isLoadingMore = true);
-    try {
-      final nextPage = _currentPage + 1;
-      final newCoins = await _apiService.fetchCoinsPaginated(
-        page: nextPage,
-        size: _itemsPerPage,
-      );
-      if (newCoins.isEmpty) {
-        _hasMoreData = false;
-      } else {
-        final existingIds = allCoinsTab.map((e) => e.id).toSet();
-        final filtered =
-            newCoins.where((coin) => !existingIds.contains(coin.id)).toList();
-        allCoinsTab.addAll(filtered);
-        _currentPage = nextPage;
+  Future<void> _loadMoreCoinsForActiveTab() async {
+    if (_selectedTabIndex == 0) {
+      // All Coins
+      setState(() => _isLoadingMore = true);
+      try {
+        final nextPage = _currentPage + 1;
+        _log('Tab0 LOAD MORE -> requesting page=$nextPage size=$_itemsPerPage');
+        final newCoins = await _apiService.fetchCoinsPaginated(
+          page: nextPage,
+          size: _itemsPerPage,
+        );
+        _log('Tab0 page=$nextPage rawLen=${newCoins.length}');
+        if (newCoins.isEmpty) {
+          _hasMoreData = false;
+          _log('Tab0 page=$nextPage returned EMPTY -> hasMore=false');
+        } else {
+          final existingIds = allCoinsTab.map((e) => e.id).toSet();
+          final filtered =
+              newCoins.where((c) => !existingIds.contains(c.id)).toList();
+          final dups = newCoins.length - filtered.length;
+          _log(
+            'Tab0 page=$nextPage filteredLen=${filtered.length} (dups=$dups)',
+          );
+          if (filtered.isEmpty && dups > 0) {
+            _log(
+              '⚠️ Tab0 page=$nextPage all items were duplicates -> API may be ignoring page param.',
+            );
+          }
+          allCoinsTab.addAll(filtered);
+          _currentPage = nextPage;
+          _logList('Tab0 after-append (page=$_currentPage)', allCoinsTab);
+        }
+      } catch (e) {
+        _log('❌ Tab0 loadMore error: $e');
       }
-    } catch (e) {
-      print("❌ _loadMoreCoins Error: $e");
+      if (mounted) setState(() => _isLoadingMore = false);
+    } else if (_selectedTabIndex == 1) {
+      // Top Coins
+      setState(() => _topCoinsIsLoadingMore = true);
+      try {
+        final nextPage = _topCoinsPage + 1;
+        _log('Tab1 LOAD MORE -> requesting page=$nextPage size=$_itemsPerPage');
+        final newCoins = await _apiService.fetchCoinsPaginated(
+          page: nextPage,
+          size: _itemsPerPage,
+          // sort: 'market_cap_desc',
+        );
+        _log('Tab1 page=$nextPage rawLen=${newCoins.length}');
+        if (newCoins.isEmpty) {
+          _topCoinsHasMore = false;
+          _log('Tab1 page=$nextPage returned EMPTY -> hasMore=false');
+        } else {
+          final existingIds = topCoinsTab.map((e) => e.id).toSet();
+          final filtered =
+              newCoins.where((c) => !existingIds.contains(c.id)).toList();
+          final dups = newCoins.length - filtered.length;
+          _log(
+            'Tab1 page=$nextPage filteredLen=${filtered.length} (dups=$dups)',
+          );
+          if (filtered.isEmpty && dups > 0) {
+            _log(
+              '⚠️ Tab1 page=$nextPage all items were duplicates -> API may be ignoring page param.',
+            );
+          }
+          topCoinsTab.addAll(filtered);
+          _topCoinsPage = nextPage;
+          _logList('Tab1 after-append (page=$_topCoinsPage)', topCoinsTab);
+        }
+      } catch (e) {
+        _log('❌ Tab1 loadMore error: $e');
+      }
+      if (mounted) setState(() => _topCoinsIsLoadingMore = false);
     }
-    setState(() => _isLoadingMore = false);
   }
 
   Future<bool> isUserLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    return token != null && token.isNotEmpty;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final res = token != null && token.isNotEmpty;
+      _log('isUserLoggedIn() -> $res');
+      return res;
+    } catch (e) {
+      _log('❌ isUserLoggedIn() error: $e');
+      return false;
+    }
   }
 
   Future<void> _onTabChanged(int index) async {
     if (_selectedTabIndex == index) return;
+
+    _log('_onTabChanged from=$_selectedTabIndex to=$index');
     setState(() => _selectedTabIndex = index);
+
+    // If leaving Categories detail, reset selection
+    if (index != 5 && selectedCategoryName != null) {
+      _log('Leaving Tab5 detail -> reset selectedCategory');
+      selectedCategoryName = null;
+      selectedCategoryCoins = [];
+    }
+
     await fetchInitialData(index);
   }
 
@@ -225,6 +379,23 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cardWidth = (MediaQuery.of(context).size.width - 24 - 6) / 4;
+
+    // Compute start rank per active tab (only for paginated tabs)
+    final int startRank =
+        (_selectedTabIndex == 0
+                ? (_currentPage - 1)
+                : _selectedTabIndex == 1
+                ? (_topCoinsPage - 1)
+                : 0) *
+            _itemsPerPage +
+        1;
+
+    final bool isBottomLoading =
+        _selectedTabIndex == 0
+            ? _isLoadingMore
+            : _selectedTabIndex == 1
+            ? _topCoinsIsLoadingMore
+            : false;
 
     return DefaultTabController(
       length: 6,
@@ -244,7 +415,6 @@ class _HomeScreenState extends State<HomeScreen>
                 width: 40,
                 height: 40,
               ),
-
               const SizedBox(width: 8),
               Text(
                 'RWA PROS',
@@ -264,11 +434,13 @@ class _HomeScreenState extends State<HomeScreen>
                 width: 24,
                 color: theme.iconTheme.color,
               ),
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CoinSearchScreen()),
-                  ),
+              onPressed: () {
+                _log('Tap search -> CoinSearchScreen');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CoinSearchScreen()),
+                );
+              },
             ),
             IconButton(
               icon: SvgPicture.asset(
@@ -276,11 +448,13 @@ class _HomeScreenState extends State<HomeScreen>
                 width: 30,
                 color: theme.iconTheme.color,
               ),
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  ),
+              onPressed: () {
+                _log('Tap profile -> ProfileScreen');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
             ),
           ],
         ),
@@ -322,7 +496,6 @@ class _HomeScreenState extends State<HomeScreen>
                       width: cardWidth,
                     ),
                   ),
-
                   const SizedBox(width: 2),
                   Expanded(
                     child: StatCard(
@@ -348,11 +521,17 @@ class _HomeScreenState extends State<HomeScreen>
                   width: double.infinity,
                   child: Padding(
                     padding: const EdgeInsets.only(left: 12, right: 12),
-                    child: TabBarSection(onTap: _onTabChanged),
+                    child: TabBarSection(
+                      onTap: (i) {
+                        _log('TabBarSection.onTap($i)');
+                        _onTabChanged(i);
+                      },
+                    ),
                   ),
                 ),
               ),
             ),
+
             Expanded(
               child:
                   _isLoading
@@ -361,14 +540,15 @@ class _HomeScreenState extends State<HomeScreen>
                           color: Color(0xFFEBB411),
                         ),
                       )
-                      : _selectedTabIndex == 5
+                      : // ===== Categories Tab (index 5) =====
+                      _selectedTabIndex == 5
                       ? _isCategoryLoading
                           ? const Center(
                             child: CircularProgressIndicator(
                               color: Color(0xFFEBB411),
                             ),
                           )
-                          : selectedCategoryCoins.isNotEmpty
+                          : (selectedCategoryName != null)
                           ? Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -380,6 +560,9 @@ class _HomeScreenState extends State<HomeScreen>
                                       size: 18,
                                     ),
                                     onPressed: () {
+                                      _log(
+                                        'Category back pressed -> clear selection',
+                                      );
                                       setState(() {
                                         selectedCategoryCoins = [];
                                         selectedCategoryName = null;
@@ -395,22 +578,30 @@ class _HomeScreenState extends State<HomeScreen>
                                   ),
                                 ],
                               ),
-                              Expanded(
-                                child: CoinsTable(
-                                  coins: currentTabCoins,
-                                  scrollController: _scrollController,
-                                  onCoinTap: (coin) {},
-                                  startRank:
-                                      (_currentPage - 1) * _itemsPerPage + 1,
-                                  isLoadingMore: _isLoadingMore,
+                              if (selectedCategoryCoins.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                    'No tokens found in this category.',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                )
+                              else
+                                Expanded(
+                                  child: CoinsTable(
+                                    coins: selectedCategoryCoins,
+                                    scrollController: _scrollController,
+                                    onCoinTap: (coin) {
+                                      _log(
+                                        'Tap coin in category: id=${coin.id} symbol=${coin.symbol}',
+                                      );
+                                    },
+                                    startRank: 1,
+                                  ),
                                 ),
-
-                                // child: CoinsTable(
-                                //   coins: selectedCategoryCoins,
-                                //   scrollController: _scrollController,
-                                //   onCoinTap: (coin) {},
-                                // ),
-                              ),
                             ],
                           )
                           : ListView.builder(
@@ -423,6 +614,9 @@ class _HomeScreenState extends State<HomeScreen>
 
                               return GestureDetector(
                                 onTap: () async {
+                                  _log(
+                                    'Category tap -> ${category.name} (${category.id})',
+                                  );
                                   setState(() {
                                     _isCategoryLoading = true;
                                     selectedCategoryCoins = [];
@@ -432,9 +626,13 @@ class _HomeScreenState extends State<HomeScreen>
                                   try {
                                     selectedCategoryCoins = await _apiService
                                         .fetchCoinsByCategory(category.id);
+                                    _log(
+                                      'Category "${category.name}" coins=${selectedCategoryCoins.length}',
+                                    );
                                   } catch (e) {
-                                    print("❌ fetchCoinsByCategory Error: $e");
+                                    _log('❌ fetchCoinsByCategory error: $e');
                                   }
+                                  if (!mounted) return;
                                   setState(() {
                                     _isCategoryLoading = false;
                                   });
@@ -457,9 +655,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   child: Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
-
                                     children: [
-                                      // 3 images side by side
                                       Row(
                                         children:
                                             images.map((img) {
@@ -481,7 +677,6 @@ class _HomeScreenState extends State<HomeScreen>
                                             }).toList(),
                                       ),
                                       const SizedBox(width: 12),
-                                      // Title and 24h change below
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment:
@@ -497,7 +692,6 @@ class _HomeScreenState extends State<HomeScreen>
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
-
                                             const SizedBox(height: 2),
                                             Text(
                                               "${category.avg24hPercent.toStringAsFixed(2)}%",
@@ -518,14 +712,15 @@ class _HomeScreenState extends State<HomeScreen>
                               );
                             },
                           )
-                      : _selectedTabIndex == 2 && _showLoginButton
+                      : // ===== Watchlist gate (index 2) =====
+                      _selectedTabIndex == 2 && _showLoginButton
                       ? Center(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.lock_outline,
                                 size: 60,
                                 color: Colors.grey,
@@ -545,6 +740,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   backgroundColor: const Color(0xFFEBB411),
                                 ),
                                 onPressed: () {
+                                  _log('Tap Login -> OnboardingScreen');
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -567,7 +763,8 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                       )
-                      : currentTabCoins.isEmpty && _selectedTabIndex == 2
+                      : // Watchlist empty state
+                      currentTabCoins.isEmpty && _selectedTabIndex == 2
                       ? Center(
                         child: Text(
                           'No coin yet added',
@@ -578,34 +775,46 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                       )
-                      : RefreshIndicator(
+                      : // ===== Main coins lists (tabs 0/1/3/4/2 when logged in) =====
+                      RefreshIndicator(
                         color: const Color(0xFFEBB411),
                         onRefresh: () async {
-                          _currentPage = 1;
-                          _hasMoreData = true;
+                          _log(
+                            'RefreshIndicator.onRefresh tab=$_selectedTabIndex',
+                          );
+                          if (_selectedTabIndex == 0) {
+                            _currentPage = 1;
+                            _hasMoreData = true;
+                          } else if (_selectedTabIndex == 1) {
+                            _topCoinsPage = 1;
+                            _topCoinsHasMore = true;
+                          }
                           await fetchInitialData(_selectedTabIndex);
                         },
                         child: CoinsTable(
                           coins: currentTabCoins,
                           scrollController: _scrollController,
-                          onCoinTap: (coin) {},
-                          startRank: (_currentPage - 1) * _itemsPerPage + 1,
+                          onCoinTap: (coin) {
+                            _log(
+                              'Tap coin: id=${coin.id} symbol=${coin.symbol}',
+                            );
+                          },
+                          startRank: startRank,
+                          isLoadingMore: isBottomLoading,
                         ),
                       ),
             ),
           ],
         ),
+
         floatingActionButton: FloatingActionButton(
-          onPressed:
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ComingSoonScreen()),
-              ),
-          // onPressed:
-          //     () => Navigator.push(
-          //       context,
-          //       MaterialPageRoute(builder: (_) => const ChatScreen()),
-          //     ),
+          onPressed: () {
+            _log('FAB -> ComingSoonScreen');
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ComingSoonScreen()),
+            );
+          },
           backgroundColor: const Color(0xFFEBB411),
           shape: const CircleBorder(),
           child: SvgPicture.asset(
