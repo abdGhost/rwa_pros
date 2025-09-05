@@ -38,6 +38,10 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
   Set<int> lockedIndexes = {};
 
+  // Track operations started from THIS device
+  final Set<String> inflightLike = {};
+  final Set<String> inflightDislike = {};
+
   @override
   void initState() {
     super.initState();
@@ -93,10 +97,11 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
 
     // ✅ Listen for newly added threads in this category
     socket.on('forumAdded', (data) {
-      print('New thread added to category: $data');
+      final reactions =
+          (data['reactions'] as Map?)?.cast<String, dynamic>() ?? const {};
       final userObj =
           (data['userId'] is Map)
-              ? data['userId'] as Map<String, dynamic>
+              ? (data['userId'] as Map).cast<String, dynamic>()
               : null;
 
       setState(() {
@@ -104,119 +109,104 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
           '_id': data['_id'] ?? '',
           'title': data['title'] ?? '',
           'description': data['text'] ?? '',
-          'author':
-              (data['userId'] is Map)
-                  ? (data['userId']?['userName'] ?? 'Unknown')
-                  : 'Unknown',
-          'userId': userObj?['_id'] ?? '', // ✅
-          'profileImage': userObj?['profileImage'] ?? '', // ✅
+          'author': userObj?['userName'] ?? 'Unknown',
+          'userId': userObj?['_id'] ?? '',
+          'profileImage': userObj?['profileImage'] ?? '',
           'replies': data['commentsCount'] ?? 0,
-          'likes':
-              (data['upvotes'] ?? 0) +
-              ((data['reactions'] as Map<String, dynamic>?)?.values.fold(
-                    0,
-                    (sum, value) => sum + (value as int),
-                  ) ??
-                  0),
+          'likes': (data['upvotes'] ?? 0) + (reactions['👍'] ?? 0),
+          'dislikes': (reactions['👎'] ?? 0),
           'createdAt': data['createdAt'] ?? '',
           'isReact': data['isReact'] ?? false,
+          'isDislike': data['isDislike'] ?? false,
         });
-
         likedList.insert(0, data['isReact'] ?? false);
+        dislikedList.insert(0, data['isDislike'] ?? false);
       });
     });
 
     socket.on('reactToForum', (data) {
-      final updatedThreadId = data['forumId'];
+      final threadId = data['forumId'];
       final reactorUserId = data['userId'];
-      final action = data['action'];
+      final action = data['action']; // 'Added' | 'Remove' | 'Updated'
 
-      print('🔔 reactToForum received:');
-      print('📌 forumId: $updatedThreadId');
-      print('👤 reactorUserId: $reactorUserId');
-      print('➡️  action: $action');
-      print('🧍 myUserId: $userId');
+      final index = threads.indexWhere((t) => t['_id'] == threadId);
+      if (index == -1) return;
 
-      final index = threads.indexWhere((t) => t['_id'] == updatedThreadId);
-      if (index == -1) {
-        print('❌ Thread not found');
-        return;
-      }
+      final fromMe = reactorUserId == userId;
+      final startedHere =
+          inflightLike.contains(threadId) || inflightDislike.contains(threadId);
 
-      if (reactorUserId == userId) {
-        print('⚠️ Skipping update — event was triggered by this user.');
-        return;
-      }
+      // If it's my own echo for an action I started on THIS device, skip (optimistic already applied).
+      if (fromMe && startedHere) return;
 
       setState(() {
-        int currentLikes = threads[index]['likes'] ?? 0;
-        int currentDislikes = threads[index]['dislikes'] ?? 0;
+        final currLikes = (threads[index]['likes'] ?? 0) as int;
+        final currDislikes = (threads[index]['dislikes'] ?? 0) as int;
 
         if (action == 'Added') {
-          threads[index]['likes'] = currentLikes + 1;
-          print('👍 Like added by another user');
+          threads[index]['likes'] = currLikes + 1;
+          if (fromMe && !startedHere) {
+            // came from my OTHER device → sync my toggle/color locally
+            likedList[index] = true;
+          }
         } else if (action == 'Remove') {
-          threads[index]['likes'] = (currentLikes - 1).clamp(0, currentLikes);
-          print('🧹 Like removed by other user');
+          threads[index]['likes'] = (currLikes - 1).clamp(0, currLikes);
+          if (fromMe && !startedHere) {
+            likedList[index] = false;
+          }
         } else if (action == 'Updated') {
-          threads[index]['likes'] = currentLikes + 1;
-          print('✅ Updated likes to ${currentLikes + 1} (from other user)');
+          // dislike → like
+          threads[index]['likes'] = currLikes + 1;
+          if (currDislikes > 0) threads[index]['dislikes'] = currDislikes - 1;
+          if (fromMe && !startedHere) {
+            likedList[index] = true;
+            dislikedList[index] = false;
+          }
         }
       });
     });
 
     socket.on('reactToForumDislike', (data) {
-      print('🔔 reactToForumDislike received: $data');
-
-      final updatedThreadId = data['forumId'];
+      final threadId = data['forumId'];
       final reactorUserId = data['userId'];
       final action = data['action'];
 
-      final index = threads.indexWhere((t) => t['_id'] == updatedThreadId);
+      final index = threads.indexWhere((t) => t['_id'] == threadId);
+      if (index == -1) return;
 
-      if (index != -1) {
-        if (reactorUserId == userId) {
-          print(
-            '👤 Dislike reaction is from my user, skipping duplicate UI update.',
-          );
-          return;
-        }
+      final fromMe = reactorUserId == userId;
+      final startedHere =
+          inflightLike.contains(threadId) || inflightDislike.contains(threadId);
 
-        setState(() {
-          int currentDislikes = threads[index]['dislikes'] ?? 0;
-          int updatedDislikes = currentDislikes;
+      if (fromMe && startedHere) return; // same-device echo
 
-          if (action == 'Added') {
-            updatedDislikes = currentDislikes + 1;
-            dislikedList[index] = true; // ✅ mark disliked
-          } else if (action == 'Remove') {
-            updatedDislikes =
-                (currentDislikes - 1).clamp(0, double.infinity).toInt();
-            dislikedList[index] = false; // ✅ mark undisliked
-          } else if (action == 'Updated') {
-            updatedDislikes = currentDislikes + 1;
+      setState(() {
+        final currDislikes = (threads[index]['dislikes'] ?? 0) as int;
+        final currLikes = (threads[index]['likes'] ?? 0) as int;
 
-            int currentLikes = threads[index]['likes'] ?? 0;
-            if (currentLikes > 0) {
-              threads[index]['likes'] = currentLikes - 1;
-              likedList[index] = false; // ✅ clear like
-              print('✅ Decremented likes count due to Updated dislike switch');
-            }
-
-            dislikedList[index] = true; // ✅ mark disliked
-            print('✅ Reaction updated from like to dislike');
-          } else {
-            print('⚠️ Unknown dislike action: $action');
+        if (action == 'Added') {
+          threads[index]['dislikes'] = currDislikes + 1;
+          if (fromMe && !startedHere) {
+            dislikedList[index] = true;
           }
-
-          threads[index]['dislikes'] = updatedDislikes;
-          print(
-            '✅ Updated dislikes count to $updatedDislikes for another user',
+        } else if (action == 'Remove') {
+          threads[index]['dislikes'] = (currDislikes - 1).clamp(
+            0,
+            currDislikes,
           );
-        });
-      } else {
-        print('⚠️ Thread not found for id $updatedThreadId');
-      }
+          if (fromMe && !startedHere) {
+            dislikedList[index] = false;
+          }
+        } else if (action == 'Updated') {
+          // like → dislike
+          threads[index]['dislikes'] = currDislikes + 1;
+          if (currLikes > 0) threads[index]['likes'] = currLikes - 1;
+          if (fromMe && !startedHere) {
+            dislikedList[index] = true;
+            likedList[index] = false;
+          }
+        }
+      });
     });
 
     socket.on('commentAdded', (data) {
@@ -326,44 +316,30 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
   }
 
   Future<void> reactToThread(String forumId, int index) async {
-    print('🟡 reactToThread called for forumId: $forumId at index $index');
-
-    if (!canTap(index)) {
-      print('⏳ Tap too fast, skipping for index $index');
-      return;
-    }
+    if (!canTap(index)) return;
 
     lockedIndexes.add(index);
-    final isLiked = likedList[index];
-    print('🔘 Initial like state: $isLiked');
+    inflightLike.add(forumId); // 👈 mark started here
 
-    // Optimistic UI update
+    final wasLiked = likedList[index];
     setState(() {
-      likedList[index] = !isLiked;
-      threads[index] = {
-        ...threads[index],
-        'likes': max(0, (threads[index]['likes'] ?? 0) + (!isLiked ? 1 : -1)),
-      };
-
-      if (!isLiked && dislikedList[index]) {
+      likedList[index] = !wasLiked;
+      threads[index]['likes'] = max(
+        0,
+        (threads[index]['likes'] ?? 0) + (!wasLiked ? 1 : -1),
+      );
+      if (!wasLiked && dislikedList[index]) {
         dislikedList[index] = false;
-        threads[index] = {
-          ...threads[index],
-          'dislikes': max(0, (threads[index]['dislikes'] ?? 1) - 1),
-        };
-        print('✅ Removed dislike because like was toggled ON');
+        threads[index]['dislikes'] = max(
+          0,
+          (threads[index]['dislikes'] ?? 1) - 1,
+        );
       }
     });
 
-    final url = 'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react';
-    print('🌐 Making POST request to: $url');
-    print(
-      '📦 Payload: forumId=$forumId, SubCategoryId=${widget.forumData['subCategoryId']}',
-    );
-
     try {
-      final response = await http.post(
-        Uri.parse(url),
+      final res = await http.post(
+        Uri.parse('https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -375,23 +351,13 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
           "emoji": "",
         }),
       );
-
-      print('📬 Response status: ${response.statusCode}');
-      print('📬 Response body: ${response.body}');
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        print('✅ Like API success. Emitting socket event...');
-        socket.emit('reactThread', {"forumId": forumId});
-      } else {
-        print('❌ Like API failed. Reverting optimistic UI update.');
-        revertLikeState(index, isLiked);
-      }
-    } catch (e) {
-      print('❌ Network exception: $e');
-      revertLikeState(index, isLiked);
+      if (res.statusCode != 200 && res.statusCode != 201)
+        revertLikeState(index, wasLiked);
+    } catch (_) {
+      revertLikeState(index, wasLiked);
     } finally {
+      inflightLike.remove(forumId); // 👈 clear
       lockedIndexes.remove(index);
-      print('🔓 Index $index unlocked');
     }
   }
 
@@ -399,59 +365,39 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
     setState(() {
       likedList[index] = wasLiked;
 
-      threads[index] = {
-        ...threads[index],
-        'likes': max(0, (threads[index]['likes'] ?? 0) + (wasLiked ? 1 : -1)),
-      };
-
-      if (!wasLiked && !dislikedList[index]) {
-        dislikedList[index] = true;
-
-        threads[index] = {
-          ...threads[index],
-          'dislikes': (threads[index]['dislikes'] ?? 0) + 1,
-        };
-      }
+      final currentLikes = (threads[index]['likes'] ?? 0) as int;
+      threads[index]['likes'] =
+          wasLiked
+              ? currentLikes +
+                  1 // we had decremented on optimistic toggle
+              : (currentLikes - 1).clamp(0, currentLikes);
     });
   }
 
   Future<void> dislikeToThread(String forumId, int index) async {
-    if (!canTap(index)) {
-      print('⏳ Tap too fast, skipping for index $index');
-      return;
-    }
+    if (!canTap(index)) return;
 
     lockedIndexes.add(index);
+    inflightDislike.add(forumId); // 👈 mark started here
 
-    final isDisliked = dislikedList[index];
-
+    final wasDisliked = dislikedList[index];
     setState(() {
-      dislikedList[index] = !isDisliked;
-
-      threads[index] = {
-        ...threads[index],
-        'dislikes': max(
-          0,
-          (threads[index]['dislikes'] ?? 0) + (!isDisliked ? 1 : -1),
-        ),
-      };
-
-      if (!isDisliked && likedList[index]) {
+      dislikedList[index] = !wasDisliked;
+      threads[index]['dislikes'] = max(
+        0,
+        (threads[index]['dislikes'] ?? 0) + (!wasDisliked ? 1 : -1),
+      );
+      if (!wasDisliked && likedList[index]) {
         likedList[index] = false;
-
-        threads[index] = {
-          ...threads[index],
-          'likes': max(0, (threads[index]['likes'] ?? 1) - 1),
-        };
+        threads[index]['likes'] = max(0, (threads[index]['likes'] ?? 1) - 1);
       }
     });
 
-    final url =
-        'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react/dislike';
-
     try {
-      final response = await http.post(
-        Uri.parse(url),
+      final res = await http.post(
+        Uri.parse(
+          'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react/dislike',
+        ),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -463,17 +409,12 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
           "emoji": "👎",
         }),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        socket.emit('reactThread', {"forumId": forumId});
-      } else {
-        print('❌ Server error, restoring dislike state');
-        revertDislikeState(index, isDisliked);
-      }
-    } catch (e) {
-      print('❌ Network error: $e');
-      revertDislikeState(index, isDisliked);
+      if (res.statusCode != 200 && res.statusCode != 201)
+        revertDislikeState(index, wasDisliked);
+    } catch (_) {
+      revertDislikeState(index, wasDisliked);
     } finally {
+      inflightDislike.remove(forumId); // 👈 clear
       lockedIndexes.remove(index);
     }
   }
@@ -482,22 +423,12 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
     setState(() {
       dislikedList[index] = wasDisliked;
 
-      threads[index] = {
-        ...threads[index],
-        'dislikes': max(
-          0,
-          (threads[index]['dislikes'] ?? 0) + (wasDisliked ? 1 : -1),
-        ),
-      };
-
-      if (!wasDisliked && !likedList[index]) {
-        likedList[index] = true;
-
-        threads[index] = {
-          ...threads[index],
-          'likes': (threads[index]['likes'] ?? 0) + 1,
-        };
-      }
+      final currentDislikes = (threads[index]['dislikes'] ?? 0) as int;
+      threads[index]['dislikes'] =
+          wasDisliked
+              ? currentDislikes +
+                  1 // we had decremented on optimistic toggle
+              : (currentDislikes - 1).clamp(0, currentDislikes);
     });
   }
 
