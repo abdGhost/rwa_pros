@@ -11,6 +11,9 @@ import 'package:uuid/uuid.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
 
+// 🔗 NEW: open profile screens
+import 'package:rwa_app/screens/profile/new_profile.dart';
+
 class ThreadDetailScreen extends StatefulWidget {
   final Map<String, dynamic> thread;
   final IO.Socket socket;
@@ -58,9 +61,12 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   bool _loaded = false; // becomes true after initial load
   bool _dirty = false; // becomes true if anything changed here
 
+  // 🔗 NEW: store main author's userId
+  String? authorId;
+
   @override
   void dispose() {
-    _countsDebounce?.cancel(); // 👈 add this
+    _countsDebounce?.cancel();
     socket.off('commentAddToForum');
     socket.off('reactToForum');
     socket.off('reactToForumDislike');
@@ -71,14 +77,36 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     super.dispose();
   }
 
+  // 🔗 NEW: robust userId extractor (string or embedded map)
+  String? _coerceUserId(dynamic u) {
+    if (u == null) return null;
+    if (u is String) return u;
+    if (u is Map) {
+      final v = (u['_id'] ?? u['id']);
+      return v is String ? v : null;
+    }
+    return null;
+  }
+
+  // 🔗 NEW: open profile helper
+  void _openUserProfile(String? userId) {
+    if (userId == null || userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile not available for this user.')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => NewProfileScreen(viewedUserId: userId)),
+    );
+  }
+
   void _scheduleCountsRefresh() {
     _countsDebounce?.cancel();
     _countsDebounce = Timer(const Duration(milliseconds: 150), () async {
-      // Reuse your existing loader; it sets isLiked/isDisliked/likeCount/dislikeCount from server.
-      await fetchThreadData();
-      if (mounted) {
-        setState(() {}); // ensure rebuild with canonical values
-      }
+      await fetchThreadData(); // canonical values from server
+      if (mounted) setState(() {});
     });
   }
 
@@ -89,7 +117,11 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     socket = widget.socket;
 
+    // 🔗 fallback author id from the thread map (in case API returns it there)
+    authorId = _coerceUserId(widget.thread['userId']);
+
     SharedPreferences.getInstance().then((prefs) {
+      if (!mounted) return;
       setState(() {
         currentUserId = prefs.getString('userId') ?? ''; // ✅ Correct key
       });
@@ -121,6 +153,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           "text": quoted['text'] ?? '',
           "username": quoted['username'] ?? 'Unknown',
           "createdAt": quoted['createdAt'] ?? '',
+          // 🔗 optional if backend sends
+          "userId": _coerceUserId(quoted['userId']),
         };
       }
 
@@ -130,12 +164,15 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           "parentId": quotedParsed?['id'] ?? (quoted is String ? quoted : null),
           "quotedCommentedId": quotedParsed,
           "name": comment['username'] ?? 'Unknown',
+          "userId": _coerceUserId(comment['userId']), // 🔗 NEW
           "time": timeAgo(comment['createdAt']),
           "createdAt":
               comment['createdAt'] ?? DateTime.now().toUtc().toIso8601String(),
           "text": comment['text'] ?? '',
           "isLiked": false,
           "likes": 0,
+          "isDisliked": false,
+          "dislikes": 0,
         });
         commentsCount += 1;
         _dirty = true;
@@ -160,7 +197,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       final reactions =
           (data['reactions'] as Map?)?.cast<String, dynamic>() ?? const {};
       final upvotes = (data['upvotes'] as int?) ?? 0;
-      final action = data['action'] as String?;
 
       setState(() {
         if (reactions.isNotEmpty) {
@@ -179,8 +215,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           }
           _dirty = true;
         } else {
-          // No snapshot in event → don’t guess counts (avoid double math)
-          // We already toggled color locally in the tap handler.
+          // No snapshot in event → don’t guess counts
           _scheduleCountsRefresh();
         }
       });
@@ -203,7 +238,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       final reactions =
           (data['reactions'] as Map?)?.cast<String, dynamic>() ?? const {};
       final upvotes = (data['upvotes'] as int?) ?? 0;
-      final action = data['action'] as String?;
 
       setState(() {
         if (reactions.isNotEmpty) {
@@ -223,6 +257,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         }
       });
     });
+
     socket.on('reactToComment', (data) async {
       if (!mounted) return;
 
@@ -372,6 +407,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           dislikeCount = dislikeReactions;
           commentsCount = forum['commentsCount'] ?? 0;
           author = forum['userId']?['userName'] ?? 'Unknown';
+          authorId = _coerceUserId(forum['userId']) ?? authorId; // 🔗 NEW
           description = forum['text'] ?? '';
           lastUpdated = forum['createdAt'] ?? '';
         });
@@ -421,6 +457,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     "text": quoted['text'] ?? '',
                     "username": quoted['username'] ?? 'Unknown',
                     "createdAt": quoted['createdAt'] ?? '',
+                    // 🔗 optional if backend sends
+                    "userId": _coerceUserId(quoted['userId']),
                   };
                 }
 
@@ -434,6 +472,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   "parentId": quotedParsed?['id'],
                   "quotedCommentedId": quotedParsed,
                   "name": item['username'] ?? 'Unknown',
+                  "userId": _coerceUserId(item['userId']), // 🔗 NEW
                   "time": timeAgo(item['createdAt']),
                   "createdAt": item['createdAt'],
                   "text": item['text'] ?? '',
@@ -493,13 +532,15 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       } else {
         print("❌ Failed to add comment: ${response.body}");
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to send reply. Please try again.")),
+          const SnackBar(
+            content: Text("Failed to send reply. Please try again."),
+          ),
         );
       }
     } catch (e) {
       print("❌ Error adding comment: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error sending reply. Please try again.")),
+        const SnackBar(content: Text("Error sending reply. Please try again.")),
       );
     } finally {
       setState(() {
@@ -524,7 +565,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     final now = DateTime.now();
     final lastTap = tapTimestamps[key];
 
-    if (lastTap != null && now.difference(lastTap) < Duration(seconds: 1)) {
+    if (lastTap != null &&
+        now.difference(lastTap) < const Duration(seconds: 1)) {
       return false;
     }
 
@@ -556,7 +598,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         }
         return false;
       },
-
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(title: Text(title)),
@@ -570,7 +611,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     Expanded(
                       child: ListView(
                         controller: _scrollController,
-                        // padding: const EdgeInsets.all(12),
                         children: [
                           _buildMainPost(theme),
                           const SizedBox(height: 16),
@@ -588,9 +628,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                           const SizedBox(height: 8),
                           if (replies.isEmpty)
                             SizedBox(
-                              height:
-                                  MediaQuery.of(context).size.height *
-                                  0.45, // adjust as needed
+                              height: MediaQuery.of(context).size.height * 0.45,
                               child: Center(
                                 child: Text(
                                   'No discussions yet.',
@@ -620,9 +658,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                                         selectedCommentId == reply['id']
                                             ? const Color(
                                               0xFFEBB411,
-                                            ).withOpacity(
-                                              0.1,
-                                            ) // Optional background highlight
+                                            ).withOpacity(0.1)
                                             : Colors.transparent,
                                     border: Border.all(
                                       color:
@@ -632,22 +668,11 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                                       width:
                                           selectedCommentId == reply['id']
                                               ? .4
-                                              : 0.0, // Change width here
+                                              : 0.0,
                                     ),
                                   ),
                                   child: _buildReplyCard(reply, theme, index),
                                 ),
-
-                                // child: Container(
-                                //   decoration: BoxDecoration(
-                                //     color:
-                                //         selectedCommentId == reply['id']
-                                //             ? Color(0xFFEBB411)
-                                //             : Colors.transparent,
-                                //     // borderRadius: BorderRadius.circular(4),
-                                //   ),
-                                //   child: _buildReplyCard(reply, theme, index),
-                                // ),
                               );
                             }).toList(),
                         ],
@@ -689,7 +714,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                           ],
                         ),
                       ),
-
                     _buildReplyInput(theme),
                   ],
                 ),
@@ -743,16 +767,37 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Author
+              // 🔗 Author (clickable)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  "- $author",
-                  style: GoogleFonts.inter(
-                    fontStyle: FontStyle.italic,
-                    fontSize: 12,
-                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "- ",
+                      style: GoogleFonts.inter(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 12,
+                        color: theme.textTheme.bodySmall?.color?.withOpacity(
+                          0.6,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _openUserProfile(authorId),
+                      child: Text(
+                        author,
+                        style: GoogleFonts.inter(
+                          fontStyle: FontStyle.italic,
+                          fontSize: 12,
+                          color: theme.textTheme.bodySmall?.color?.withOpacity(
+                            0.9,
+                          ),
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
@@ -844,9 +889,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
                     // Time
                     Text(
-                      _timestampLabelNoTZ(
-                        lastUpdated,
-                      ), // was: timeAgo(lastUpdated)
+                      _timestampLabelNoTZ(lastUpdated),
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.grey[500],
@@ -867,7 +910,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     ThemeData theme,
     int index,
   ) {
-    final likes = reply['likes'] as int;
     final dislikes = reply['dislikes'] as int? ?? 0; // ✅ Added dislikes
     final quoted = reply['quotedCommentedId'];
 
@@ -877,8 +919,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         if (!snapshot.hasData) {
           return const SizedBox.shrink();
         }
-
-        final currentUsername = snapshot.data!.getString('name') ?? '';
 
         return Card(
           elevation: 0.02,
@@ -896,89 +936,131 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (quoted != null) ...[
-                            Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  left: BorderSide(
-                                    color: theme.primaryColor,
-                                    width: 3,
+                // Quoted block (optional)
+                if (quoted != null) ...[
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: theme.primaryColor, width: 3),
+                      ),
+                      color: theme.cardColor.withOpacity(0.05),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          quoted['text'] ?? '',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // 🔗 quoted author clickable
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              "- ",
+                              style: GoogleFonts.inter(
+                                fontStyle: FontStyle.italic,
+                                fontSize: 11,
+                                color: theme.textTheme.bodySmall?.color
+                                    ?.withOpacity(0.6),
+                              ),
+                            ),
+                            InkWell(
+                              onTap:
+                                  () => _openUserProfile(
+                                    _coerceUserId(quoted['userId']),
                                   ),
+                              child: Text(
+                                '${quoted['username']}',
+                                style: GoogleFonts.inter(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 11,
+                                  color: theme.textTheme.bodySmall?.color
+                                      ?.withOpacity(0.9),
+                                  decoration: TextDecoration.underline,
                                 ),
-                                color: theme.cardColor.withOpacity(0.05),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    quoted['text'] ?? '',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontStyle: FontStyle.italic,
-                                      color: theme.textTheme.bodyLarge?.color,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    quoted['createdAt'] != null &&
-                                            quoted['createdAt']
-                                                .toString()
-                                                .isNotEmpty
-                                        ? "- ${quoted['username']} • ${timeAgo(quoted['createdAt'])}"
-                                        : "- ${quoted['username']}",
-                                    style: GoogleFonts.inter(
-                                      fontStyle: FontStyle.italic,
-                                      fontSize: 11,
-                                      color: theme.textTheme.bodySmall?.color
-                                          ?.withOpacity(0.6),
-                                    ),
-                                  ),
-                                ],
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            if (quoted['createdAt'] != null &&
+                                quoted['createdAt'].toString().isNotEmpty)
+                              Text(
+                                ' • ${timeAgo(quoted['createdAt'])}',
+                                style: GoogleFonts.inter(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 11,
+                                  color: theme.textTheme.bodySmall?.color
+                                      ?.withOpacity(0.6),
+                                ),
+                              ),
                           ],
-                          Text(
-                            reply['text'],
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: theme.textTheme.bodyLarge?.color,
-                            ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                // Reply text
+                Text(
+                  reply['text'],
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // 🔗 Reply author clickable
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '- ',
+                      style: GoogleFonts.inter(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 12,
+                        color: theme.textTheme.bodySmall?.color?.withOpacity(
+                          0.6,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap:
+                          () =>
+                              _openUserProfile(_coerceUserId(reply['userId'])),
+                      child: Text(
+                        '${reply['name']}',
+                        style: GoogleFonts.inter(
+                          fontStyle: FontStyle.italic,
+                          fontSize: 12,
+                          color: theme.textTheme.bodySmall?.color?.withOpacity(
+                            0.9,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '- ${reply['name']}',
-                            style: GoogleFonts.inter(
-                              fontStyle: FontStyle.italic,
-                              fontSize: 12,
-                              color: theme.textTheme.bodySmall?.color
-                                  ?.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
+                          decoration: TextDecoration.underline,
+                        ),
                       ),
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 4),
+
+                // Actions row
                 Row(
                   children: [
                     InkWell(
                       onTap: () async {
                         if (await _ensureLoggedIn()) _toggleReplyLike(index);
                       },
-
                       child: Row(
                         children: [
                           Icon(
@@ -988,7 +1070,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                             size: 18,
                             color:
                                 reply['isLiked']
-                                    ? Color(0xFFEBB411)
+                                    ? const Color(0xFFEBB411)
                                     : Colors.grey[700],
                           ),
                           const SizedBox(width: 4),
@@ -998,7 +1080,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                               fontSize: 12,
                               color:
                                   reply['isLiked']
-                                      ? Color(0xFFEBB411)
+                                      ? const Color(0xFFEBB411)
                                       : Colors.grey[700],
                             ),
                           ),
@@ -1010,7 +1092,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                       onTap: () async {
                         if (await _ensureLoggedIn()) _toggleReplyDislike(index);
                       },
-
                       child: Row(
                         children: [
                           Icon(
@@ -1040,8 +1121,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     const Spacer(),
                     Text(
                       _timestampLabelNoTZ(reply['createdAt']),
-
-                      // _timestampLabel(reply['createdAt']), // was: reply['time']
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.grey[500],
@@ -1085,7 +1164,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   border: InputBorder.none,
                 ),
                 minLines: 1,
-                maxLines: 10, // ✅ allows expansion up to 5 lines
+                maxLines: 10,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
               ),
@@ -1100,7 +1179,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
             child: IconButton(
               icon:
                   isSending
-                      ? SizedBox(
+                      ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
@@ -1108,7 +1187,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                           strokeWidth: 2,
                         ),
                       )
-                      : Icon(Icons.send, color: Colors.white),
+                      : const Icon(Icons.send, color: Colors.white),
               onPressed:
                   isSending
                       ? null
@@ -1161,8 +1240,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "emoji": "",
       "subCategoryId": widget.thread['subCategoryId'],
     };
-
-    print(payload);
 
     // Optimistic UI update
     setState(() {
@@ -1240,8 +1317,6 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       "emoji": "👎",
       "subCategoryId": widget.thread['subCategoryId'],
     };
-
-    print(payload);
 
     // Optimistic UI update
     setState(() {
@@ -1335,7 +1410,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       // no local UI changes here! (color stays as-is)
       // Optional fallback if socket is slow: fetch snapshot once to update both together
       if (res.statusCode == 200 || res.statusCode == 201) {
-        // await fetchThreadData(); // <-- enable if you want an HTTP fallback
+        // await fetchThreadData();
       }
     } catch (_) {
       // no-op; keep UI unchanged
@@ -1377,9 +1452,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       );
 
       // no local UI changes here
-      // Optional fallback:
       if (res.statusCode == 200 || res.statusCode == 201) {
-        // await fetchThreadData(); // <-- enable if you want an HTTP fallback
+        // await fetchThreadData();
       }
     } catch (_) {
       // no-op
