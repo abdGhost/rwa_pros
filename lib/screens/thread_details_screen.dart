@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'dart:async';
 
 class ThreadDetailScreen extends StatefulWidget {
   final Map<String, dynamic> thread;
@@ -48,6 +49,33 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   bool _isDescriptionExpanded = false;
   bool isMainReactionProcessing = false;
   Map<String, DateTime> tapTimestamps = {};
+  // Track ops started from THIS device so we don't double-apply our own echo
+  final Set<String> inflightForumLike = {};
+  final Set<String> inflightForumDislike = {};
+  Timer? _countsDebounce;
+
+  @override
+  void dispose() {
+    _countsDebounce?.cancel(); // 👈 add this
+    socket.off('commentAddToForum');
+    socket.off('reactToForum');
+    socket.off('reactToForumDislike');
+    socket.off('reactToComment');
+    _replyController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleCountsRefresh() {
+    _countsDebounce?.cancel();
+    _countsDebounce = Timer(const Duration(milliseconds: 150), () async {
+      // Reuse your existing loader; it sets isLiked/isDisliked/likeCount/dislikeCount from server.
+      await fetchThreadData();
+      if (mounted) {
+        setState(() {}); // ensure rebuild with canonical values
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -106,102 +134,85 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       });
     });
 
+    // 👍 LIKE
     socket.on('reactToForum', (data) async {
-      if (!mounted || isMainReactionProcessing) return;
-
-      final updatedThreadId = data['forumId'];
-      final reactorUserId = data['userId'];
-      final action = data['action'];
-      final reactions = data['reactions'] as Map<String, dynamic>? ?? {};
-
-      if (updatedThreadId != widget.thread['_id']) return;
+      if (!mounted) return;
+      final threadId = data['forumId'];
+      if (threadId != widget.thread['_id']) return;
 
       final prefs = await SharedPreferences.getInstance();
-      final currentUserId = prefs.getString('userId') ?? '';
-      final isMyAction = reactorUserId == currentUserId;
+      final myId = prefs.getString('userId') ?? '';
+      final fromMe = (data['userId'] == myId);
+
+      // Did this reaction start on THIS device?
+      final startedHere =
+          inflightForumLike.contains(threadId) ||
+          inflightForumDislike.contains(threadId);
+
+      final reactions =
+          (data['reactions'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final upvotes = (data['upvotes'] as int?) ?? 0;
+      final action = data['action'] as String?;
 
       setState(() {
-        likeCount =
-            (reactions['👍'] ?? likeCount).clamp(0, double.infinity).toInt();
-        dislikeCount =
-            (reactions['👎'] ?? dislikeCount).clamp(0, double.infinity).toInt();
+        if (reactions.isNotEmpty) {
+          // Canonical snapshot → snap counts deterministically
+          likeCount =
+              (upvotes + (reactions['👍'] ?? 0))
+                  .clamp(0, double.infinity)
+                  .toInt();
+          dislikeCount =
+              ((reactions['👎'] ?? 0)).clamp(0, double.infinity).toInt();
 
-        if (isMyAction) {
-          if (action == 'Added' || action == 'Updated') {
+          // Keep toggles consistent if it was my action from another device
+          if (fromMe && !startedHere) {
             isLiked = true;
             isDisliked = false;
-          } else if (action == 'Remove') {
-            isLiked = false;
           }
+        } else {
+          // No snapshot in event → don’t guess counts (avoid double math)
+          // We already toggled color locally in the tap handler.
+          _scheduleCountsRefresh();
         }
-
-        print(
-          '🔁 reactToForum: 👍 $likeCount 👎 $dislikeCount isLiked=$isLiked isDisliked=$isDisliked',
-        );
       });
     });
 
+    // 👎 DISLIKE
     socket.on('reactToForumDislike', (data) async {
       if (!mounted) return;
-
-      print('🔔 reactToForumDislike received: $data');
-
-      final updatedThreadId = data['forumId'];
-      final reactorUserId = data['userId'];
-      final action = data['action'];
-
-      if (updatedThreadId != widget.thread['_id']) return;
+      final threadId = data['forumId'];
+      if (threadId != widget.thread['_id']) return;
 
       final prefs = await SharedPreferences.getInstance();
-      final currentUserId = prefs.getString('userId') ?? '';
-      final isMyAction = reactorUserId == currentUserId;
+      final myId = prefs.getString('userId') ?? '';
+      final fromMe = (data['userId'] == myId);
+
+      final startedHere =
+          inflightForumLike.contains(threadId) ||
+          inflightForumDislike.contains(threadId);
+
+      final reactions =
+          (data['reactions'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final upvotes = (data['upvotes'] as int?) ?? 0;
+      final action = data['action'] as String?;
 
       setState(() {
-        if (action == 'Added') {
-          final shouldIncrement = !isMyAction || !isDisliked;
-
-          if (shouldIncrement) {
-            dislikeCount += 1;
-          }
-
-          if (isMyAction) {
-            if (isLiked && likeCount > 0) likeCount -= 1;
-            isLiked = false;
+        if (reactions.isNotEmpty) {
+          likeCount =
+              (upvotes + (reactions['👍'] ?? 0))
+                  .clamp(0, double.infinity)
+                  .toInt();
+          dislikeCount =
+              ((reactions['👎'] ?? 0)).clamp(0, double.infinity).toInt();
+          if (fromMe && !startedHere) {
             isDisliked = true;
-          }
-        } else if (action == 'Remove') {
-          if (dislikeCount > 0) dislikeCount -= 1;
-
-          if (isMyAction) {
-            isDisliked = false;
-          }
-        } else if (action == 'Updated') {
-          final shouldIncrement = !isMyAction || !isDisliked;
-
-          if (shouldIncrement) {
-            dislikeCount += 1;
-          }
-
-          if (isLiked && likeCount > 0) likeCount -= 1;
-
-          if (isMyAction) {
             isLiked = false;
-            isDisliked = true;
           }
+        } else {
+          _scheduleCountsRefresh();
         }
-
-        // Clamp safety
-        likeCount = likeCount.clamp(0, double.infinity).toInt();
-        dislikeCount = dislikeCount.clamp(0, double.infinity).toInt();
-
-        print('✅ Updated counts: 👍 $likeCount 👎 $dislikeCount');
-        print('🔢 User state: isLiked=$isLiked, isDisliked=$isDisliked');
-        print(
-          '🔢 UI Rebuilding with likeCount = $likeCount and isLiked = $isLiked',
-        );
       });
     });
-
     socket.on('reactToComment', (data) async {
       if (!mounted) return;
 
@@ -305,17 +316,17 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     loadData();
   }
 
-  @override
-  void dispose() {
-    socket.off('commentAddToForum');
-    socket.off('reactToForum');
-    socket.off('reactToForumDislike'); // ✅ Clean up dislike listener
-    socket.off('reactToComment');
+  // @override
+  // void dispose() {
+  //   socket.off('commentAddToForum');
+  //   socket.off('reactToForum');
+  //   socket.off('reactToForumDislike'); // ✅ Clean up dislike listener
+  //   socket.off('reactToComment');
 
-    _replyController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
+  //   _replyController.dispose();
+  //   _scrollController.dispose();
+  //   super.dispose();
+  // }
 
   Future<void> loadData() async {
     await Future.wait([fetchThreadData(), fetchComments()]);
@@ -696,16 +707,14 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       child: Card(
         elevation: 0.02,
         color: theme.cardColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero, // optional: remove corner radius
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         margin: EdgeInsets.zero,
-        // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Title
               Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
@@ -718,6 +727,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 ),
               ),
               const SizedBox(height: 6),
+
+              // Description (collapsible)
               HtmlPreviewWithToggle(
                 html: description,
                 isExpanded: _isDescriptionExpanded,
@@ -728,9 +739,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 },
               ),
               const SizedBox(height: 8),
+
+              // Author
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-
                 child: Text(
                   "- $author",
                   style: GoogleFonts.inter(
@@ -741,12 +753,13 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+
+              // Reactions + meta
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-
                 child: Row(
                   children: [
-                    // LIKE BUTTON
+                    // LIKE
                     InkWell(
                       onTap: () async {
                         if (isMainReactionProcessing) return;
@@ -755,10 +768,14 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.thumb_up_outlined,
+                            isLiked
+                                ? Icons.thumb_up
+                                : Icons.thumb_up_outlined, // filled when active
                             size: 18,
                             color:
-                                isLiked ? Color(0xFFEBB411) : Colors.grey[700],
+                                isLiked
+                                    ? const Color(0xFFEBB411)
+                                    : Colors.grey[700],
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -767,7 +784,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                               fontSize: 12,
                               color:
                                   isLiked
-                                      ? Color(0xFFEBB411)
+                                      ? const Color(0xFFEBB411)
                                       : Colors.grey[700],
                             ),
                           ),
@@ -776,7 +793,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     ),
                     const SizedBox(width: 16),
 
-                    // DISLIKE BUTTON
+                    // DISLIKE
                     InkWell(
                       onTap: () async {
                         if (isMainReactionProcessing) return;
@@ -785,7 +802,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.thumb_down_outlined,
+                            isDisliked
+                                ? Icons.thumb_down
+                                : Icons
+                                    .thumb_down_outlined, // filled when active
                             size: 18,
                             color: isDisliked ? Colors.red : Colors.grey[700],
                           ),
@@ -816,7 +836,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                         color: Colors.grey[700],
                       ),
                     ),
+
                     const Spacer(),
+
+                    // Time
                     Text(
                       timeAgo(lastUpdated),
                       style: GoogleFonts.inter(
@@ -1280,16 +1303,20 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     final token = prefs.getString('token') ?? '';
     final forumId = widget.thread['_id'];
 
+    final catRaw = widget.thread['categoryId'];
+    final categoryId =
+        catRaw is String ? catRaw : (catRaw is Map ? catRaw['_id'] : null);
+
     final url = 'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react';
     final payload = {
       "forumId": forumId,
       "emoji": "",
       "subCategoryId": widget.thread['subCategoryId'],
-      "categoryId": widget.thread['categoryId'],
+      "categoryId": categoryId,
     };
 
     try {
-      final response = await http.post(
+      final res = await http.post(
         Uri.parse(url),
         headers: {
           "Content-Type": "application/json",
@@ -1298,32 +1325,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         body: jsonEncode(payload),
       );
 
-      setState(() {
-        if (response.statusCode == 201) {
-          if (!isLiked) {
-            isLiked = true;
-            likeCount += 1;
-          }
-          if (isDisliked && dislikeCount > 0) {
-            isDisliked = false;
-            dislikeCount -= 1;
-          }
-        } else if (response.statusCode == 200) {
-          if (isLiked && likeCount > 0) {
-            isLiked = false;
-            likeCount -= 1;
-          }
-        } else {
-          print("❌ Like failed: ${response.body}");
-        }
-
-        likeCount = likeCount.clamp(0, double.infinity).toInt();
-        dislikeCount = dislikeCount.clamp(0, double.infinity).toInt();
-      });
-    } catch (e) {
-      print("❌ Error liking post: $e");
+      // no local UI changes here! (color stays as-is)
+      // Optional fallback if socket is slow: fetch snapshot once to update both together
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        // await fetchThreadData(); // <-- enable if you want an HTTP fallback
+      }
+    } catch (_) {
+      // no-op; keep UI unchanged
     } finally {
       isMainReactionProcessing = false;
+      if (mounted) setState(() {}); // re-enable taps
     }
   }
 
@@ -1335,17 +1346,21 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     final token = prefs.getString('token') ?? '';
     final forumId = widget.thread['_id'];
 
+    final catRaw = widget.thread['categoryId'];
+    final categoryId =
+        catRaw is String ? catRaw : (catRaw is Map ? catRaw['_id'] : null);
+
     final url =
         'https://rwa-f1623a22e3ed.herokuapp.com/api/forum/react/dislike';
     final payload = {
       "forumId": forumId,
       "emoji": "👎",
       "subCategoryId": widget.thread['subCategoryId'],
-      "categoryId": widget.thread['categoryId'],
+      "categoryId": categoryId,
     };
 
     try {
-      final response = await http.post(
+      final res = await http.post(
         Uri.parse(url),
         headers: {
           "Content-Type": "application/json",
@@ -1354,32 +1369,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         body: jsonEncode(payload),
       );
 
-      setState(() {
-        if (response.statusCode == 201) {
-          if (!isDisliked) {
-            isDisliked = true;
-            dislikeCount += 1;
-          }
-          if (isLiked && likeCount > 0) {
-            isLiked = false;
-            likeCount -= 1;
-          }
-        } else if (response.statusCode == 200) {
-          if (isDisliked && dislikeCount > 0) {
-            isDisliked = false;
-            dislikeCount -= 1;
-          }
-        } else {
-          print("❌ Dislike failed: ${response.body}");
-        }
-
-        likeCount = likeCount.clamp(0, double.infinity).toInt();
-        dislikeCount = dislikeCount.clamp(0, double.infinity).toInt();
-      });
-    } catch (e) {
-      print("❌ Error disliking post: $e");
+      // no local UI changes here
+      // Optional fallback:
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        // await fetchThreadData(); // <-- enable if you want an HTTP fallback
+      }
+    } catch (_) {
+      // no-op
     } finally {
       isMainReactionProcessing = false;
+      if (mounted) setState(() {});
     }
   }
 }
