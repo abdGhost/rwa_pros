@@ -64,6 +64,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     socket.off('reactToForum');
     socket.off('reactToForumDislike');
     socket.off('reactToComment');
+    socket.off('reactToCommentDislike');
     _replyController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -134,6 +135,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           "likes": 0,
         });
         commentsCount += 1;
+        _dirty = true;
       });
     });
 
@@ -172,6 +174,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
             isLiked = true;
             isDisliked = false;
           }
+          _dirty = true;
         } else {
           // No snapshot in event → don’t guess counts (avoid double math)
           // We already toggled color locally in the tap handler.
@@ -211,6 +214,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
             isDisliked = true;
             isLiked = false;
           }
+          _dirty = true;
         } else {
           _scheduleCountsRefresh();
         }
