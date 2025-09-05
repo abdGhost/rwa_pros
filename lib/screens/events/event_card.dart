@@ -1,11 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EventCard extends StatelessWidget {
   final Map<String, dynamic> event;
   final VoidCallback onTap;
 
   const EventCard({super.key, required this.event, required this.onTap});
+
+  Future<void> _openRegistration(BuildContext context) async {
+    // Prefer registrationUrl; gracefully fall back to eventLink if present
+    String raw = ((event['registrationUrl'] ?? '') as String).trim();
+    if (raw.isEmpty) {
+      raw = ((event['eventLink'] ?? '') as String).trim();
+    }
+
+    if (raw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Registration link not available')),
+      );
+      return;
+    }
+
+    Uri? uri = Uri.tryParse(raw);
+    // If scheme is missing, assume https
+    if (uri == null || uri.scheme.isEmpty) {
+      uri = Uri.tryParse('https://$raw');
+    }
+    if (uri == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid registration link')),
+      );
+      return;
+    }
+
+    // Log for your console
+    // ignore: avoid_print
+    print('🔎 [Register] open: ${uri.toString()} | title=${event['title']}');
+
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open registration link')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +148,7 @@ class EventCard extends StatelessWidget {
                           ),
                         ),
                         ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () => _openRegistration(context),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFEBB411),
                             padding: const EdgeInsets.symmetric(
@@ -189,11 +228,11 @@ class EventCard extends StatelessWidget {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'ongoing':
-        return Colors.green;
+        return Colors.green; // keep your UI as-is
       case 'upcoming':
-        return Color(0xFFEBB411);
+        return const Color(0xFFEBB411); // yellow
       case 'ended':
-        return Colors.red;
+        return Colors.red; // your current card UI uses red for Ended
       default:
         return Colors.grey;
     }

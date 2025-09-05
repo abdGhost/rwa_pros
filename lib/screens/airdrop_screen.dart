@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:rwa_app/screens/airdrop_details_screen.dart';
-import 'package:rwa_app/screens/chat_screen.dart';
 import 'package:rwa_app/screens/coming_soon.dart';
 import 'package:rwa_app/screens/profile_screen.dart';
 import 'package:rwa_app/widgets/airdrop/airdrop_card.dart';
@@ -23,13 +22,21 @@ class _AirdropScreenState extends State<AirdropScreen> {
   bool _isLoading = true;
 
   List<Map<String, String>> airdrops = [];
-
   final List<String> tabs = ["Recently Added", "Live", "Ended", "Upcoming"];
 
   @override
   void initState() {
     super.initState();
     fetchAirdrops();
+  }
+
+  String stripHtml(String? input) {
+    if (input == null) return '';
+    final noTags = input.replaceAll(
+      RegExp(r'<[^>]*>', multiLine: true, caseSensitive: false),
+      ' ',
+    );
+    return noTags.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   Future<void> fetchAirdrops() async {
@@ -40,74 +47,69 @@ class _AirdropScreenState extends State<AirdropScreen> {
       final response = await http.get(url);
       final data = json.decode(response.body);
       final List fetched = data["airdrops"];
-      print('airdrop Data $fetched');
 
-      setState(() {
-        airdrops =
-            fetched
-                .map<Map<String, String>>((item) {
-                  try {
-                    // Extract actual date part: e.g. from "16T12:09/07/2025" take "07/07/2025"
-                    final startRaw = item['airdropStart'] as String;
-                    final endRaw = item['airdropEnd'] as String;
+      airdrops =
+          fetched
+              .map<Map<String, String>>((item) {
+                try {
+                  // Example raw: "16T12:09/07/2025" → use first 2 char of first segment as day
+                  final startRaw = (item['airdropStart'] ?? '').toString();
+                  final endRaw = (item['airdropEnd'] ?? '').toString();
 
-                    // Split at '/' and take last 3 parts
-                    final startParts = startRaw.split('/');
-                    final endParts = endRaw.split('/');
+                  final startParts = startRaw.split('/');
+                  final endParts = endRaw.split('/');
 
-                    final startString =
-                        startParts.length >= 3
-                            ? "${startParts[0].substring(0, 2)}/${startParts[1]}/${startParts[2]}"
-                            : "01/01/1970";
+                  final startString =
+                      startParts.length >= 3
+                          ? "${startParts[0].substring(0, 2)}/${startParts[1]}/${startParts[2]}"
+                          : "01/01/1970";
 
-                    final endString =
-                        endParts.length >= 3
-                            ? "${endParts[0].substring(0, 2)}/${endParts[1]}/${endParts[2]}"
-                            : "01/01/1970";
+                  final endString =
+                      endParts.length >= 3
+                          ? "${endParts[0].substring(0, 2)}/${endParts[1]}/${endParts[2]}"
+                          : "01/01/1970";
 
-                    final dateFormat = DateFormat('dd/MM/yyyy');
-                    DateTime start = dateFormat.parse(startString);
-                    DateTime end = dateFormat.parse(endString);
-                    final now = DateTime.now();
+                  final dateFormat = DateFormat('dd/MM/yyyy');
+                  final start = dateFormat.parse(startString);
+                  final end = dateFormat.parse(endString);
+                  final now = DateTime.now();
 
-                    bool isLive = now.isAfter(start) && now.isBefore(end);
-                    bool isEnded = now.isAfter(end);
+                  final isLive = now.isAfter(start) && now.isBefore(end);
+                  final isEnded = now.isAfter(end);
+                  final category =
+                      isLive ? "Live" : (isEnded ? "Ended" : "Upcoming");
 
-                    String category =
-                        isLive
-                            ? "Live"
-                            : isEnded
-                            ? "Ended"
-                            : "Upcoming";
+                  return {
+                    '_id': (item['_id'] ?? '').toString(),
+                    'project': (item['tokenName'] ?? '').toString().trim(),
+                    'token': (item['tokenTicker'] ?? '').toString(),
+                    'chain': (item['chain'] ?? '').toString(),
+                    'reward': (item['airdropAmt'] ?? '').toString(),
+                    'image': (item['image'] ?? '').toString(),
+                    // ✅ strip HTML here so cards don’t show tags
+                    'description': stripHtml(
+                      (item['tokenDescription'] ?? '').toString(),
+                    ),
+                    'date':
+                        "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
+                    // Eligibility can be long; keep original (detail screen can strip/format as needed)
+                    'eligibility':
+                        (item['airdropEligibility'] ?? '').toString(),
+                    'status': category,
+                    'category': category,
+                  };
+                } catch (e) {
+                  debugPrint('❌ Error parsing airdrop: $e');
+                  return {};
+                }
+              })
+              .where((m) => m.isNotEmpty)
+              .toList();
 
-                    return {
-                      '_id': item['_id'],
-                      'project': item['tokenName'].trim(),
-                      'token': item['tokenTicker'],
-                      'chain': item['chain'],
-                      'reward': item['airdropAmt'],
-                      'image': item['image'],
-                      'description': item['tokenDescription'],
-                      'date':
-                          "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
-                      'eligibility': item['airdropEligibility'],
-                      'status': category,
-                      'category': category,
-                    };
-                  } catch (e) {
-                    print('❌ Error parsing airdrop date: $e');
-                    return {};
-                  }
-                })
-                .where((item) => item.isNotEmpty)
-                .toList();
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('❌ Error fetching airdrops: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -147,29 +149,20 @@ class _AirdropScreenState extends State<AirdropScreen> {
               width: 30,
               color: theme.iconTheme.color,
             ),
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
           ),
         ],
       ),
-
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 12),
-            // Center(
-            //   child: Image.asset(
-            //     'assets/airdrop.png',
-            //     width: double.infinity,
-            //     height: 210,
-            //     fit: BoxFit.cover,
-            //   ),
-            // ),
-            // const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -181,11 +174,7 @@ class _AirdropScreenState extends State<AirdropScreen> {
                         child: FilterTab(
                           text: tab,
                           isActive: _selectedTab == tab,
-                          onTap: () {
-                            setState(() {
-                              _selectedTab = tab;
-                            });
-                          },
+                          onTap: () => setState(() => _selectedTab = tab),
                           isDarkMode: isDark,
                         ),
                       );
@@ -244,8 +233,9 @@ class _AirdropScreenState extends State<AirdropScreen> {
                                         status: airdrop['status']!,
                                         isDarkMode: isDark,
                                         image: airdrop['image'] ?? '',
+                                        // ✅ pass sanitized description key
                                         description:
-                                            airdrop['tokenDescription'] ?? '',
+                                            airdrop['description'] ?? '',
                                         onTap: () {
                                           Navigator.push(
                                             context,
@@ -276,12 +266,6 @@ class _AirdropScreenState extends State<AirdropScreen> {
               MaterialPageRoute(builder: (context) => const ComingSoonScreen()),
             );
           },
-          // onPressed: () {
-          //   Navigator.push(
-          //     context,
-          //     MaterialPageRoute(builder: (context) => const ChatScreen()),
-          //   );
-          // },
           backgroundColor: const Color(0xFFEBB411),
           shape: const CircleBorder(),
           child: SvgPicture.asset(

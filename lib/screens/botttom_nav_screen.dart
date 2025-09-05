@@ -89,7 +89,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
           ),
           BottomNavigationBarItem(
             icon: _buildIcon('airdrop', 2, theme, isDark),
-            label: 'Airdrop',
+            label: 'Discover',
           ),
           BottomNavigationBarItem(
             icon: _buildIcon('portfolio', 3, theme, isDark),

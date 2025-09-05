@@ -40,33 +40,56 @@ class _EventsScreenState extends State<EventsScreen> {
           data
               .map<Map<String, dynamic>>((item) {
                 try {
-                  final start = DateTime.parse(item['startDate']).toLocal();
-                  final end = DateTime.parse(item['endDate']).toLocal();
+                  final start =
+                      DateTime.parse(
+                        (item['startDate'] ?? '').toString(),
+                      ).toLocal();
+                  final end =
+                      DateTime.parse(
+                        (item['endDate'] ?? '').toString(),
+                      ).toLocal();
 
                   String status;
                   if (now.isAfter(end)) {
                     status = "Ended";
                   } else if (now.isAfter(start)) {
-                    status = "Ongoing";
+                    status = "Ongoing"; // ✅ normalized (not "Live")
                   } else {
                     status = "Upcoming";
                   }
 
-                  print(
-                    "🎯 ${item["title"]} | Start: $start | End: $end | Now: $now → Status: $status",
-                  );
+                  // Be tolerant to various backend fields for registration
+                  final registrationUrl =
+                      (item['registrationUrl'] ??
+                              item['registrationLink'] ??
+                              item['registerLink'] ??
+                              item['eventLink'] ??
+                              item['link'] ??
+                              '')
+                          .toString()
+                          .trim();
+
+                  // Guard some fields
+                  final eventTags =
+                      (item["eventTag"] is List)
+                          ? List<String>.from(item["eventTag"])
+                          : <String>[];
+                  final type = (item["eventType"] ?? '').toString();
 
                   return {
                     "_id": item["_id"],
-                    "title": item["title"],
-                    "location": item["eventLocation"],
+                    "title": (item["title"] ?? '').toString(),
+                    "location": (item["eventLocation"] ?? '').toString(),
                     "date":
                         "${DateFormat('MMMM dd').format(start)} – ${DateFormat('MMMM dd, yyyy').format(end)}",
-                    "pricing": "N/A",
-                    "type": item["eventType"],
-                    "tags": item["eventTag"],
-                    "image": item["image"],
-                    "status": status,
+                    "pricing": (item["pricing"] ?? "N/A").toString(),
+                    "type": type, // webinar / seminar / hybrid
+                    "tags": eventTags, // list of tags
+                    "image": (item["image"] ?? '').toString(),
+                    "status": status, // Ongoing / Upcoming / Ended
+                    "registrationUrl": registrationUrl, // used by cards/details
+                    "startDate": start.toIso8601String(),
+                    "endDate": end.toIso8601String(),
                   };
                 } catch (e) {
                   debugPrint("⚠️ Error parsing event: $e");
@@ -75,10 +98,17 @@ class _EventsScreenState extends State<EventsScreen> {
               })
               .where((e) => e.isNotEmpty)
               .toList();
+
+      // Optional: sort by start date ascending
+      events.sort((a, b) {
+        final ad = DateTime.tryParse(a['startDate'] ?? '') ?? DateTime.now();
+        final bd = DateTime.tryParse(b['startDate'] ?? '') ?? DateTime.now();
+        return ad.compareTo(bd);
+      });
     } catch (e) {
       debugPrint("❌ Error fetching events: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -96,11 +126,9 @@ class _EventsScreenState extends State<EventsScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
-    final cardWidth = (MediaQuery.of(context).size.width - 24 - 6) / 4;
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF7F7F7),
-
       appBar: AppBar(
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: theme.appBarTheme.elevation,
@@ -125,15 +153,15 @@ class _EventsScreenState extends State<EventsScreen> {
               width: 30,
               color: theme.iconTheme.color,
             ),
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
           ),
         ],
       ),
-
       body: SafeArea(
         child: Column(
           children: [
@@ -200,8 +228,6 @@ class _EventsScreenState extends State<EventsScreen> {
                                       ),
                                       child: EventCard(
                                         event: event,
-
-                                        // inside onTap:
                                         onTap: () {
                                           Navigator.push(
                                             context,
@@ -209,8 +235,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                               builder:
                                                   (_) => EventDetailScreen(
                                                     eventId: event['_id'],
-                                                    title:
-                                                        event['title'], // ✅ passed title here
+                                                    title: event['title'],
                                                   ),
                                             ),
                                           );

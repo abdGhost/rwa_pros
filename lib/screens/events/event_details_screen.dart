@@ -35,15 +35,122 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     try {
       final response = await http.get(url);
       final List data = json.decode(response.body)["events"];
-      event = data.firstWhere(
+      final raw = data.firstWhere(
         (e) => e['_id'] == widget.eventId,
         orElse: () => {},
       );
+      if (raw.isEmpty) {
+        setState(() {
+          event = {};
+          isLoading = false;
+        });
+        return;
+      }
+
+      // Normalize + compute status
+      final start =
+          DateTime.tryParse((raw['startDate'] ?? '').toString())?.toLocal();
+      final end =
+          DateTime.tryParse((raw['endDate'] ?? '').toString())?.toLocal();
+      final now = DateTime.now();
+      String status = '';
+      if (start != null && end != null) {
+        if (now.isBefore(start))
+          status = 'Upcoming';
+        else if (now.isAfter(end))
+          status = 'Ended';
+        else
+          status = 'Ongoing'; // ✅ match cards
+      }
+
+      final registrationUrl =
+          (raw['registrationUrl'] ??
+                  raw['registrationLink'] ??
+                  raw['registerLink'] ??
+                  raw['eventLink'] ??
+                  raw['link'] ??
+                  '')
+              .toString()
+              .trim();
+
+      event = {
+        ...raw,
+        'status': status,
+        'registrationUrl': registrationUrl,
+        'startDateLocal': start?.toIso8601String(),
+        'endDateLocal': end?.toIso8601String(),
+      };
+
       setState(() => isLoading = false);
     } catch (e) {
       debugPrint("❌ Error fetching event details: $e");
       setState(() => isLoading = false);
     }
+  }
+
+  Color _statusColor(String s) {
+    switch (s.toLowerCase()) {
+      case 'ongoing':
+        return const Color(0xFF27AE60);
+      case 'upcoming':
+        return const Color(0xFFEBB411);
+      case 'ended':
+        return Colors.grey;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _statusChip(String status) {
+    final c = _statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c),
+      ),
+      child: Text(
+        status.isEmpty ? '—' : status,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: c,
+        ),
+      ),
+    );
+  }
+
+  Widget _typePill(String type, bool isDark) {
+    if (type.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEF2F6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        type,
+        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  String _formatDate(String raw) {
+    try {
+      final date = DateTime.parse(raw).toLocal();
+      return DateFormat('MMM d, yyyy • hh:mm a').format(date);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  Future<void> _openRegistration() async {
+    final url = (event?['registrationUrl'] ?? '').toString();
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -62,7 +169,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ? const Center(
                 child: CircularProgressIndicator(color: Color(0xFFEBB411)),
               )
-              : event == null || event!.isEmpty
+              : (event == null || event!.isEmpty)
               ? const Center(child: Text('Event not found'))
               : SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(
@@ -72,8 +179,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // IMAGE + TAGS STACKED
-                    if (event!['image'] != null)
+                    // IMAGE + TAGS
+                    if ((event!['image'] ?? '').toString().isNotEmpty)
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
@@ -93,27 +200,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               spacing: 6,
                               runSpacing: 4,
                               children: [
-                                // Status tag
-                                _buildTag(
-                                  _getEventStatus(
-                                    event!['startDate'],
-                                    event!['endDate'],
-                                  ),
-                                  _getStatusColor(
-                                    event!['startDate'],
-                                    event!['endDate'],
-                                  ),
+                                _statusChip(
+                                  (event!['status'] ?? '').toString(),
                                 ),
-                                // Other tags
+                                if (event!['eventType'] != null &&
+                                    (event!['eventType']).toString().isNotEmpty)
+                                  _typePill(
+                                    (event!['eventType']).toString(),
+                                    isDark,
+                                  ),
                                 if (event!['eventTag'] != null &&
                                     event!['eventTag'] is List)
                                   ...List.generate(
                                     (event!['eventTag'] as List).length,
-                                    (index) => _buildTag(
+                                    (index) => _typePill(
                                       (event!['eventTag'][index]).toString(),
-                                      isDark
-                                          ? Colors.grey[700]!
-                                          : Colors.grey.shade400,
+                                      isDark,
                                     ),
                                   ),
                               ],
@@ -133,25 +235,35 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    _iconText("📍", event!['eventLocation'], isDark),
                     _iconText(
-                      "🗓️",
-                      "Start: ${_formatDate(event!['startDate'])}",
+                      "📍",
+                      (event!['eventLocation'] ?? '').toString(),
                       isDark,
                     ),
-                    _iconText(
-                      "🗓️",
-                      "End: ${_formatDate(event!['endDate'])}",
-                      isDark,
-                    ),
+                    if ((event!['startDate'] ?? '').toString().isNotEmpty)
+                      _iconText(
+                        "🗓️",
+                        "Start: ${_formatDate(event!['startDate'])}",
+                        isDark,
+                      ),
+                    if ((event!['endDate'] ?? '').toString().isNotEmpty)
+                      _iconText(
+                        "🗓️",
+                        "End: ${_formatDate(event!['endDate'])}",
+                        isDark,
+                      ),
 
                     const SizedBox(height: 18),
 
-                    // DESCRIPTION
+                    // DESCRIPTION (Rich HTML)
                     Html(
-                      data: event!['eventDescription'] ?? '',
+                      data: (event!['eventDescription'] ?? '').toString(),
                       onLinkTap: (url, _, __) {
-                        if (url != null) _launchURL(url);
+                        if (url != null)
+                          launchUrl(
+                            Uri.parse(url),
+                            mode: LaunchMode.externalApplication,
+                          );
                       },
                       style: {
                         "*": Style(
@@ -168,33 +280,52 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         "h1": Style(
                           fontSize: FontSize(16),
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black,
                         ),
                         "h2": Style(
                           fontSize: FontSize(15),
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black,
                         ),
                         "h3": Style(
                           fontSize: FontSize(14),
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black,
                         ),
                       },
                     ),
 
-                    if (event!['eventLink'] != null)
+                    const SizedBox(height: 10),
+
+                    // Register / Website
+                    if ((event!['registrationUrl'] ?? '').toString().isNotEmpty)
                       ElevatedButton.icon(
-                        onPressed: () async {
-                          final link = event!['eventLink'];
-                          if (link != null &&
-                              await canLaunchUrl(Uri.parse(link))) {
-                            await launchUrl(
-                              Uri.parse(link),
+                        onPressed: _openRegistration,
+                        icon: const Icon(
+                          Icons.event_available,
+                          color: Colors.white,
+                        ),
+                        label: const Text("Register"),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFFEBB411),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      )
+                    else if ((event!['eventLink'] ?? '').toString().isNotEmpty)
+                      ElevatedButton.icon(
+                        onPressed:
+                            () => launchUrl(
+                              Uri.parse(event!['eventLink']),
                               mode: LaunchMode.externalApplication,
-                            );
-                          }
-                        },
+                            ),
+                        icon: const Icon(
+                          Icons.open_in_new,
+                          color: Colors.white,
+                        ),
                         label: const Text("Visit Website"),
                         style: ElevatedButton.styleFrom(
                           foregroundColor: Colors.white,
@@ -216,6 +347,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Widget _iconText(String icon, String? value, bool isDark) {
     final Color textColor = isDark ? Colors.white70 : Colors.grey[800]!;
+    if ((value ?? '').isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -235,68 +367,5 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildTag(String text, Color backgroundColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String raw) {
-    try {
-      final date = DateTime.parse(raw).toLocal();
-      return DateFormat('MMM d, yyyy • hh:mm a').format(date);
-    } catch (_) {
-      return raw;
-    }
-  }
-
-  String _getEventStatus(String startRaw, String endRaw) {
-    try {
-      final now = DateTime.now();
-      final start = DateTime.parse(startRaw);
-      final end = DateTime.parse(endRaw);
-      if (now.isBefore(start)) return "Upcoming";
-      if (now.isAfter(end)) return "Ended";
-      return "Ongoing";
-    } catch (_) {
-      return "";
-    }
-  }
-
-  Color _getStatusColor(String startRaw, String endRaw) {
-    final status = _getEventStatus(startRaw, endRaw);
-    switch (status.toLowerCase()) {
-      case 'ongoing':
-        return Colors.green;
-      case 'upcoming':
-        return const Color(0xFFEBB411);
-      case 'ended':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  void _launchURL(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      debugPrint("Could not launch $url");
-    }
   }
 }

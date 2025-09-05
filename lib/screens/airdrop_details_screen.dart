@@ -21,12 +21,12 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
   }
 
   void _logAirdropDetailScreenView() async {
-    final porojectName = widget.airdrop['project'] ?? '';
-    final id = widget.airdrop['_id'] ?? '';
+    final projectName = (widget.airdrop['project'] ?? '').toString();
+    final id = (widget.airdrop['_id'] ?? '').toString();
 
     await _analytics.logEvent(
       name: 'view_airdrop_detail',
-      parameters: {'id': id, 'project': porojectName},
+      parameters: {'id': id, 'project': projectName},
     );
 
     await _analytics.logScreenView(
@@ -35,11 +35,48 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
     );
   }
 
+  String stripHtml(String? input) {
+    if (input == null) return '';
+    final noTags = input.replaceAll(
+      RegExp(r'<[^>]*>', multiLine: true, caseSensitive: false),
+      ' ',
+    );
+    return noTags.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  Color statusColor(String s) {
+    switch ((s).toString().toLowerCase()) {
+      case 'live':
+        return const Color(0xFF27AE60); // green
+      case 'upcoming':
+        return const Color(0xFFEBB411); // yellow
+      case 'ended':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData statusIcon(String s) {
+    switch ((s).toString().toLowerCase()) {
+      case 'live':
+        return Icons.flash_on; // lightning for Live
+      case 'upcoming':
+        return Icons.schedule; // ⏰ correct for Upcoming
+      case 'ended':
+        return Icons.history; // history for Ended
+      default:
+        return Icons.info_outline;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final Color primary = const Color(0xFFEBB411);
+
+    final status = (widget.airdrop['status'] ?? '').toString();
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : Colors.white,
@@ -63,8 +100,18 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
               width: double.infinity,
               height: 200,
               child: Image.network(
-                widget.airdrop['image'] ?? '',
+                (widget.airdrop['image'] ?? '').toString(),
                 fit: BoxFit.cover,
+                errorBuilder:
+                    (_, __, ___) => Container(
+                      color:
+                          isDark
+                              ? const Color(0xFF1A1A1A)
+                              : const Color(0xFFEFEFEF),
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported),
+                      ),
+                    ),
               ),
             ),
             const SizedBox(height: 24),
@@ -161,7 +208,11 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                                       ),
                                     ),
                                     TextSpan(
-                                      text: '${widget.airdrop['eligibility']}',
+                                      // ✅ strip HTML here to avoid raw tags
+                                      text: stripHtml(
+                                        (widget.airdrop['eligibility'] ?? '')
+                                            .toString(),
+                                      ),
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.normal,
                                         fontSize: 14,
@@ -181,6 +232,7 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                     ),
                   ),
                 ),
+                // ✅ Correct status badge, including Upcoming icon
                 Positioned(
                   top: -12,
                   right: 24,
@@ -190,12 +242,7 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color:
-                          widget.airdrop['status'] == 'Live'
-                              ? Colors.green
-                              : widget.airdrop['status'] == 'Upcoming'
-                              ? const Color(0xFFEBB411) // yellow
-                              : Colors.red,
+                      color: statusColor(status),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -205,19 +252,12 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                         ),
                       ],
                     ),
-
                     child: Row(
                       children: [
-                        Icon(
-                          widget.airdrop['status'] == 'Live'
-                              ? Icons.check_circle
-                              : Icons.cancel,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        Icon(statusIcon(status), size: 14, color: Colors.white),
                         const SizedBox(width: 5),
                         Text(
-                          widget.airdrop['status'],
+                          status,
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 12,
@@ -233,9 +273,19 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
             const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
+              // ✅ Show sanitized description
               child: Text(
-                widget.airdrop['description'] ?? 'No description available.',
-                style: GoogleFonts.inter(fontSize: 14),
+                stripHtml(
+                      (widget.airdrop['description'] ?? '').toString(),
+                    ).isNotEmpty
+                    ? stripHtml(
+                      (widget.airdrop['description'] ?? '').toString(),
+                    )
+                    : 'No description available.',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
               ),
             ),
           ],
