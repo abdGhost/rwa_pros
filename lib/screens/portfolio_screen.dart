@@ -54,6 +54,16 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     return v.toString();
   }
 
+  String? _coinId(Map<String, dynamic> coin) {
+    final id = coin['_id'] ?? coin['id'] ?? coin['tokenId'];
+    return id?.toString();
+  }
+
+  String _coinKey(Map<String, dynamic> coin) {
+    return _coinId(coin) ??
+        '${coin['symbol'] ?? ''}|${coin['name'] ?? ''}|${coin['image'] ?? ''}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -113,7 +123,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         _log('fetchPortfolio', 'coins.length=${coins.length}');
         _log(
           'fetchPortfolio',
-          'totals raw: amount=${data['totalAmount']}(${data['totalAmount']?.runtimeType}), return=${data['totalReturn']}(${data['totalReturn']?.runtimeType}), perc=${data['totalPercentage']}(${data['totalPercentage']?.runtimeType})',
+          'totals raw: amount=${data['totalAmount']}(${data['totalAmount']?.runtimeType}), '
+              'return=${data['totalReturn']}(${data['totalReturn']?.runtimeType}), '
+              'perc=${data['totalPercentage']}(${data['totalPercentage']?.runtimeType})',
         );
 
         if (!mounted) return;
@@ -149,7 +161,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     }
   }
 
-  Future<void> deleteCoinFromPortfolio(String coinId) async {
+  /// Return true on success, false otherwise.
+  Future<bool> deleteCoinFromPortfolio(String coinId) async {
     _log('deleteCoin', 'start coinId=$coinId');
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -169,27 +182,89 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       );
 
       if (response.statusCode == 200) {
-        if (!mounted) return;
-        setState(() {
-          _coins.removeWhere((coin) => coin['_id'] == coinId);
-        });
-        _log('deleteCoin', 'removed from list, remaining=${_coins.length}');
+        _log('deleteCoin', 'server OK');
+        return true;
       } else {
-        if (!mounted) return;
+        if (!mounted) return false;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete coin.', style: GoogleFonts.inter()),
           ),
         );
+        return false;
       }
     } catch (e, st) {
       _log('deleteCoin', 'ERROR: $e\n$st');
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error deleting coin: $e', style: GoogleFonts.inter()),
         ),
       );
+      return false;
+    }
+  }
+
+  Future<bool> _confirmDeleteDialog(String symbol) async {
+    return await showDialog<bool>(
+          context: context,
+          builder:
+              (ctx) => AlertDialog(
+                title: const Text('Remove from Portfolio'),
+                content: Text(
+                  'Are you sure you want to remove $symbol from your portfolio?',
+                  style: GoogleFonts.inter(),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Remove'),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+  }
+
+  Future<bool> _handleDeleteFlow(Map<String, dynamic> coin) async {
+    final id = _coinId(coin);
+    final symbol = _asString(coin['symbol']).toUpperCase();
+    if (id == null) {
+      _log('deleteFlow', 'NO ID for coin=$symbol');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not determine coin id.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+      return false;
+    }
+
+    final confirm = await _confirmDeleteDialog(symbol);
+    if (!confirm) {
+      _log('deleteFlow', 'user canceled');
+      return false;
+    }
+
+    final ok = await deleteCoinFromPortfolio(id);
+    if (ok) {
+      _log('deleteFlow', 'delete success -> refreshing portfolio');
+      if (!mounted) return true;
+      setState(() => _isLoading = true);
+      await fetchPortfolio();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$symbol removed.', style: GoogleFonts.inter())),
+      );
+      return true;
+    } else {
+      _log('deleteFlow', 'delete failed');
+      return false;
     }
   }
 
@@ -431,10 +506,51 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         ),
         const SizedBox(height: 12),
         ..._coins
-            .map((coin) => _buildCoinTile(context, Theme.of(context), coin))
+            .map(
+              (coin) =>
+                  _buildCoinRowWithDelete(context, Theme.of(context), coin),
+            )
             .toList(),
         const SizedBox(height: 20),
       ],
+    );
+  }
+
+  // Dismissible + tile + delete/add overlays
+  Widget _buildCoinRowWithDelete(
+    BuildContext context,
+    ThemeData theme,
+    Map<String, dynamic> coin,
+  ) {
+    final key = ValueKey(_coinKey(coin));
+    return Dismissible(
+      key: key,
+      direction: DismissDirection.endToStart, // swipe right -> left to delete
+      background: _buildDeleteBackground(context),
+      confirmDismiss: (_) async {
+        return await _handleDeleteFlow(coin);
+      },
+      child: _buildCoinTile(context, theme, coin),
+    );
+  }
+
+  Widget _buildDeleteBackground(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.red.shade600,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 28),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const Icon(Icons.delete_outline, color: Colors.white),
+          const SizedBox(width: 6),
+          Text('Remove', style: GoogleFonts.inter(color: Colors.white)),
+        ],
+      ),
     );
   }
 
@@ -539,6 +655,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       clipBehavior: Clip.none,
       children: [
         GestureDetector(
+          onLongPress: () async {
+            // Long-press also opens delete flow
+            await _handleDeleteFlow(coin);
+          },
           onTap: () {
             _log('nav', 'to ProfilioCoinDetailScreen coin=$symbol');
             Navigator.push(
@@ -617,6 +737,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
             ),
           ),
         ),
+
+        // Add transaction floating button (existing)
         Positioned(
           top: -10,
           right: 26,
@@ -649,6 +771,37 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 ],
               ),
               child: const Icon(Icons.add, size: 18, color: Colors.white),
+            ),
+          ),
+        ),
+
+        // NEW: quick delete floating button (trash)
+        Positioned(
+          top: -10,
+          left: 26,
+          child: GestureDetector(
+            onTap: () async {
+              await _handleDeleteFlow(coin);
+            },
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.red.shade600,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
