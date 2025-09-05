@@ -55,12 +55,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final now = DateTime.now();
       String status = '';
       if (start != null && end != null) {
-        if (now.isBefore(start))
+        if (now.isBefore(start)) {
           status = 'Upcoming';
-        else if (now.isAfter(end))
+        } else if (now.isAfter(end)) {
           status = 'Ended';
-        else
+        } else {
           status = 'Ongoing'; // ✅ match cards
+        }
       }
 
       final registrationUrl =
@@ -91,11 +92,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Color _statusColor(String s) {
     switch (s.toLowerCase()) {
       case 'ongoing':
-        return const Color(0xFF27AE60);
+        return const Color(0xFF27AE60); // green
       case 'upcoming':
-        return const Color(0xFFEBB411);
+        return const Color(0xFFEBB411); // yellow
       case 'ended':
-        return Colors.grey;
+        return Colors.red; // 🔴 red for ended
       default:
         return Colors.grey;
     }
@@ -146,11 +147,41 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<void> _openRegistration() async {
-    final url = (event?['registrationUrl'] ?? '').toString();
-    if (url.isEmpty) return;
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    // Prefer registrationUrl; gracefully fall back to eventLink
+    String raw = (event?['registrationUrl'] ?? '').toString().trim();
+    if (raw.isEmpty) {
+      raw = (event?['eventLink'] ?? '').toString().trim();
+    }
+
+    if (raw.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registration link not available')),
+        );
+      }
+      return;
+    }
+
+    Uri? uri = Uri.tryParse(raw);
+    // If scheme missing, assume https
+    if (uri == null || uri.scheme.isEmpty) {
+      uri = Uri.tryParse('https://$raw');
+    }
+    if (uri == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid registration link')),
+        );
+      }
+      return;
+    }
+
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open registration link')),
+      );
+    }
   }
 
   @override
@@ -259,11 +290,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     Html(
                       data: (event!['eventDescription'] ?? '').toString(),
                       onLinkTap: (url, _, __) {
-                        if (url != null)
+                        if (url != null) {
                           launchUrl(
                             Uri.parse(url),
                             mode: LaunchMode.externalApplication,
                           );
+                        }
                       },
                       style: {
                         "*": Style(
@@ -294,7 +326,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                     const SizedBox(height: 10),
 
-                    // Register / Website
+                    // Register / Website — always opens external browser
                     if ((event!['registrationUrl'] ?? '').toString().isNotEmpty)
                       ElevatedButton.icon(
                         onPressed: _openRegistration,
@@ -318,10 +350,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     else if ((event!['eventLink'] ?? '').toString().isNotEmpty)
                       ElevatedButton.icon(
                         onPressed:
-                            () => launchUrl(
-                              Uri.parse(event!['eventLink']),
-                              mode: LaunchMode.externalApplication,
-                            ),
+                            _openRegistration, // uses fallback to eventLink
                         icon: const Icon(
                           Icons.open_in_new,
                           color: Colors.white,

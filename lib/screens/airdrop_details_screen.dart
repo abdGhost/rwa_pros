@@ -139,18 +139,36 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        _buildRichText(
-                          isDark,
-                          label: 'Ticker: ',
-                          value: '${widget.airdrop['token']}',
+
+                        // Row 1: Ticker
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildRichText(
+                                isDark,
+                                label: 'Ticker: ',
+                                value: '${widget.airdrop['token']}',
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
-                        _buildRichText(
-                          isDark,
-                          label: 'Chain: ',
-                          value: '${widget.airdrop['chain']}',
+
+                        // Row 2: Chain
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildRichText(
+                                isDark,
+                                label: 'Chain: ',
+                                value: '${widget.airdrop['chain']}',
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
+
+                        // Row 3: Reward (icon + long text)  ✅ Expanded prevents overflow
                         Row(
                           children: [
                             Icon(
@@ -159,14 +177,18 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                               color: primary,
                             ),
                             const SizedBox(width: 4),
-                            _buildRichText(
-                              isDark,
-                              label: 'Reward Pool: ',
-                              value: '${widget.airdrop['reward']}',
+                            Expanded(
+                              child: _buildRichText(
+                                isDark,
+                                label: 'Reward Pool: ',
+                                value: '${widget.airdrop['reward']}',
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
+
+                        // Row 4: Date (icon + long text) ✅ Expanded prevents overflow
                         Row(
                           children: [
                             Icon(
@@ -175,14 +197,18 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                               color: primary,
                             ),
                             const SizedBox(width: 4),
-                            _buildRichText(
-                              isDark,
-                              label: 'Date: ',
-                              value: '${widget.airdrop['date']}',
+                            Expanded(
+                              child: _buildRichText(
+                                isDark,
+                                label: 'Date: ',
+                                value: '${widget.airdrop['date']}',
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
+
+                        // Row 5: Eligibility (already Expanded) ✅
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -208,7 +234,6 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                                       ),
                                     ),
                                     TextSpan(
-                                      // ✅ strip HTML here to avoid raw tags
                                       text: stripHtml(
                                         (widget.airdrop['eligibility'] ?? '')
                                             .toString(),
@@ -232,7 +257,8 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                     ),
                   ),
                 ),
-                // ✅ Correct status badge, including Upcoming icon
+
+                // Status badge (top-right) – keep compact so it never overflows
                 Positioned(
                   top: -12,
                   right: 24,
@@ -253,11 +279,14 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
                       ],
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min, // ✅ important
                       children: [
                         Icon(statusIcon(status), size: 14, color: Colors.white),
                         const SizedBox(width: 5),
                         Text(
                           status,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 12,
@@ -271,9 +300,10 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
               ],
             ),
             const SizedBox(height: 20),
+
+            // Description
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              // ✅ Show sanitized description
               child: Text(
                 stripHtml(
                       (widget.airdrop['description'] ?? '').toString(),
@@ -294,14 +324,15 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
     );
   }
 
+  /// Returns a **Text.rich** that ellipsizes long content to avoid overflow.
   Widget _buildRichText(
     bool isDark, {
     required String label,
     required String value,
   }) {
-    return RichText(
-      text: TextSpan(
-        style: GoogleFonts.inter(fontSize: 14),
+    return Text.rich(
+      TextSpan(
+        style: GoogleFonts.inter(fontSize: 14, height: 1.25),
         children: [
           TextSpan(
             text: label,
@@ -321,6 +352,9 @@ class _AirdropDetailScreenState extends State<AirdropDetailScreen> {
           ),
         ],
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis, // ✅ key to prevent tiny overflows
+      softWrap: false,
     );
   }
 }
