@@ -606,29 +606,65 @@ class _ForumThreadScreenState extends State<ForumThreadScreen> {
                                   ),
                             ),
                           ).then((result) {
-                            if (result != null) {
-                              final index = threads.indexWhere(
-                                (t) => t['_id'] == result['_id'],
-                              );
-                              if (index != -1) {
-                                setState(() {
-                                  threads[index]['isReact'] = result['isReact'];
-                                  threads[index]['likes'] = result['likes'];
-                                  threads[index]['replies'] =
-                                      result['commentsCount'];
+                            if (result is! Map<String, dynamic>) return;
 
-                                  // ✅ Add dislike state and count update
-                                  threads[index]['isDislike'] =
-                                      result['isDislike'];
-                                  threads[index]['dislikes'] =
-                                      result['dislikes'];
+                            final id =
+                                (result['_id'] ?? result['id']) as String?;
+                            if (id == null) return;
 
-                                  likedList[index] = result['isReact'];
-                                  dislikedList[index] =
-                                      result['isDislike']; // 🔴 Add this line
-                                });
+                            final idx = threads.indexWhere(
+                              (t) => t['_id'] == id,
+                            );
+                            if (idx == -1) return;
+
+                            final prevLikes =
+                                (threads[idx]['likes'] ?? 0) as int;
+                            final prevDislikes =
+                                (threads[idx]['dislikes'] ?? 0) as int;
+                            final prevReplies =
+                                (threads[idx]['replies'] ?? 0) as int;
+                            final prevSum =
+                                prevLikes + prevDislikes + prevReplies;
+
+                            // Pull possibly returned fields (may be null / missing when user backs too fast)
+                            final resLikes = result['likes'] as int?;
+                            final resDislikes = result['dislikes'] as int?;
+                            final resComments = result['commentsCount'] as int?;
+
+                            final hasAnyCounts =
+                                result.containsKey('likes') ||
+                                result.containsKey('dislikes') ||
+                                result.containsKey('commentsCount');
+
+                            final resSum =
+                                (resLikes ?? 0) +
+                                (resDislikes ?? 0) +
+                                (resComments ?? 0);
+
+                            // Heuristic: if previous had counts but result returns 0 or nothing → probably “unloaded” → ignore
+                            final looksUnloaded =
+                                !hasAnyCounts || (prevSum > 0 && resSum == 0);
+                            if (looksUnloaded) return;
+
+                            setState(() {
+                              if (resLikes != null)
+                                threads[idx]['likes'] = resLikes;
+                              if (resDislikes != null)
+                                threads[idx]['dislikes'] = resDislikes;
+                              if (resComments != null)
+                                threads[idx]['replies'] = resComments;
+
+                              if (result.containsKey('isReact')) {
+                                final v = result['isReact'] == true;
+                                threads[idx]['isReact'] = v;
+                                likedList[idx] = v;
                               }
-                            }
+                              if (result.containsKey('isDislike')) {
+                                final v = result['isDislike'] == true;
+                                threads[idx]['isDislike'] = v;
+                                dislikedList[idx] = v;
+                              }
+                            });
                           });
                         },
 

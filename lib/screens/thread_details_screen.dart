@@ -54,6 +54,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   final Set<String> inflightForumDislike = {};
   Timer? _countsDebounce;
 
+  bool _loaded = false; // becomes true after initial load
+  bool _dirty = false; // becomes true if anything changed here
+
   @override
   void dispose() {
     _countsDebounce?.cancel(); // 👈 add this
@@ -332,6 +335,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     await Future.wait([fetchThreadData(), fetchComments()]);
     setState(() {
       isLoading = false;
+      _loaded = true;
     });
   }
 
@@ -542,16 +546,19 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context, {
-          '_id': widget.thread['_id'],
-          'isReact': isLiked,
-          'likes': likeCount,
-          'commentsCount': commentsCount,
-          'isDislike': isDisliked, // ✅ added
-          'dislikes': dislikeCount, // ✅ added
-        });
-
-        return false; // prevent default pop because we manually did it
+        if (_loaded && _dirty) {
+          Navigator.pop(context, {
+            '_id': widget.thread['_id'],
+            'isReact': isLiked,
+            'likes': likeCount,
+            'commentsCount': commentsCount,
+            'isDislike': isDisliked,
+            'dislikes': dislikeCount,
+          });
+        } else {
+          Navigator.pop(context, null);
+        }
+        return false;
       },
 
       child: Scaffold(
