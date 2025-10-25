@@ -3,23 +3,23 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>174103700071-qvs887h2lv03spcth67n1mij9de1hpg9.apps.googleusercontent.com</string>
+	<string>636683384935-a7h6oh4slc9r2q8lel136ji9u0n6ogea.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.174103700071-qvs887h2lv03spcth67n1mij9de1hpg9</string>
+	<string>com.googleusercontent.apps.636683384935-a7h6oh4slc9r2q8lel136ji9u0n6ogea</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>174103700071-79ktf3dnnckfr1pv2phgjus97o6k7q0l.apps.googleusercontent.com</string>
+	<string>636683384935-ui824ap6mjmj3l8q0s8ml91145t6m8vf.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
-	<string>AIzaSyDk2gs53oKsH5Wx5GVMJdjpRkUzTgUTEac</string>
+	<string>AIzaSyCzGJoye3NpZTcQ61ABzyo_ou1J8vEBUyg</string>
 	<key>GCM_SENDER_ID</key>
-	<string>174103700071</string>
+	<string>636683384935</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.rwa.pros</string>
+	<string>com.example.rwapros</string>
 	<key>PROJECT_ID</key>
-	<string>rwa-pros-live</string>
+	<string>rwapros</string>
 	<key>STORAGE_BUCKET</key>
-	<string>rwa-pros-live.firebasestorage.app</string>
+	<string>rwapros.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:174103700071:ios:de5bb400397180431aaac2</string>
+	<string>1:636683384935:ios:93d62c3d701c8676f23cc2</string>
 </dict>
 </plist>

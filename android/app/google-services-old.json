@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "636683384935",
+    "project_id": "rwapros",
+    "storage_bucket": "rwapros.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:636683384935:android:64286a8db7157b8bf23cc2",
+        "android_client_info": {
+          "package_name": "com.example.rwapros"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "636683384935-ui824ap6mjmj3l8q0s8ml91145t6m8vf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.rwapros",
+            "certificate_hash": "698d914e6a22fd14d4ac83070e7fab4374a8c243"
+          }
+        },
+        {
+          "client_id": "636683384935-q27skun4hg3aqad7cdjsc7cir7mru3hl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0EFSK8ecZOx1816BSTrOFi7cRIT10VVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "636683384935-q27skun4hg3aqad7cdjsc7cir7mru3hl.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "636683384935-a7h6oh4slc9r2q8lel136ji9u0n6ogea.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.rwapros"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
